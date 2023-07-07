@@ -42,6 +42,7 @@ from nerfstudio.data.datasets.base_dataset import InputDataset
 from nerfstudio.pipelines.base_pipeline import Pipeline, VanillaPipeline
 from nerfstudio.utils.rich_utils import CONSOLE, ItersPerSecColumn
 
+import matplotlib as mpl
 
 @dataclass
 class Mesh:
@@ -92,6 +93,7 @@ def generate_point_cloud(
     bounding_box_min: Tuple[float, float, float] = (-1.0, -1.0, -1.0),
     bounding_box_max: Tuple[float, float, float] = (1.0, 1.0, 1.0),
     std_ratio: float = 10.0,
+    reorient_normals: bool = False,
 ) -> o3d.geometry.PointCloud:
     """Generate a point cloud from a nerf.
 
@@ -107,6 +109,7 @@ def generate_point_cloud(
         bounding_box_min: Minimum of the bounding box.
         bounding_box_max: Maximum of the bounding box.
         std_ratio: Threshold based on STD of the average distances across the point cloud to remove outliers.
+        reorient_normals: Whether to re-orient the normals based on the view direction.
 
     Returns:
         Point cloud.
@@ -121,7 +124,10 @@ def generate_point_cloud(
     )
     points = []
     rgbs = []
+    variances = []
     normals = []
+    view_directions = []
+
     with progress as progress_bar:
         task = progress_bar.add_task("Generating Point Cloud", total=num_points)
         while not progress_bar.finished:
@@ -142,6 +148,7 @@ def generate_point_cloud(
                 sys.exit(1)
             rgb = outputs[rgb_output_name]
             depth = outputs[depth_output_name]
+            variance = outputs["quality"]
             if normal_output_name is not None:
                 if normal_output_name not in outputs:
                     CONSOLE.rule("Error", style="red")
@@ -154,6 +161,7 @@ def generate_point_cloud(
                 ), "Normal values from method output must be in [0, 1]"
                 normal = (normal * 2.0) - 1.0
             point = ray_bundle.origins + ray_bundle.directions * depth
+            view_direction = ray_bundle.directions
 
             if use_bounding_box:
                 comp_l = torch.tensor(bounding_box_min, device=point.device)
@@ -164,20 +172,34 @@ def generate_point_cloud(
                 mask = torch.all(torch.concat([point > comp_l, point < comp_m], dim=-1), dim=-1)
                 point = point[mask]
                 rgb = rgb[mask]
+                view_direction = view_direction[mask]
+                variance = variance[mask]
                 if normal is not None:
                     normal = normal[mask]
 
             points.append(point)
             rgbs.append(rgb)
+            variances.append(variance)
+            view_directions.append(view_direction)
             if normal is not None:
                 normals.append(normal)
             progress.advance(task, point.shape[0])
     points = torch.cat(points, dim=0)
     rgbs = torch.cat(rgbs, dim=0)
+    variances = torch.cat(variances, dim=0)
+    view_directions = torch.cat(view_directions, dim=0).cpu()
+
+    variances = variances.cpu().numpy()
+    variances = np.log(variances + 1e-10)
+
+    variances -= variances.min()
+    variances /= variances.max()
 
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points.double().cpu().numpy())
     pcd.colors = o3d.utility.Vector3dVector(rgbs.double().cpu().numpy())
+    # colors = mpl.colormaps["cool"](variances)[:,0,:3]
+    # pcd.colors = o3d.utility.Vector3dVector(colors)
 
     ind = None
     if remove_outliers:
@@ -185,6 +207,8 @@ def generate_point_cloud(
         pcd, ind = pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=std_ratio)
         print("\033[A\033[A")
         CONSOLE.print("[bold green]:white_check_mark: Cleaning Point Cloud")
+        if ind is not None:
+            view_directions = view_directions[ind]
 
     # either estimate_normals or normal_output_name, not both
     if estimate_normals:
@@ -201,6 +225,13 @@ def generate_point_cloud(
         if ind is not None:
             # mask out normals for points that were removed with remove_outliers
             normals = normals[ind]
+        pcd.normals = o3d.utility.Vector3dVector(normals.double().cpu().numpy())
+    
+    # re-orient the normals
+    if reorient_normals:
+        normals = torch.from_numpy(np.array(pcd.normals)).float()
+        mask = torch.sum(view_directions * normals, dim=-1) > 0
+        normals[mask] *= -1
         pcd.normals = o3d.utility.Vector3dVector(normals.double().cpu().numpy())
 
     return pcd

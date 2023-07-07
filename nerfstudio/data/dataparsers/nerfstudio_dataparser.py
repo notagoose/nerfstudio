@@ -284,6 +284,14 @@ class Nerfstudio(DataParser):
             applied_scale = float(meta["applied_scale"])
             scale_factor *= applied_scale
 
+        metadata = {
+            "depth_filenames": [],
+            "normal_filenames": [],
+            "camera_to_worlds": [],
+            "transform": [],
+            "include_mono_prior": False,
+        }
+
         dataparser_outputs = DataparserOutputs(
             image_filenames=image_filenames,
             cameras=cameras,
@@ -291,10 +299,11 @@ class Nerfstudio(DataParser):
             mask_filenames=mask_filenames if len(mask_filenames) > 0 else None,
             dataparser_scale=scale_factor,
             dataparser_transform=transform_matrix,
-            metadata={
-                "depth_filenames": depth_filenames if len(depth_filenames) > 0 else None,
-                "depth_unit_scale_factor": self.config.depth_unit_scale_factor,
-            },
+            metadata=metadata,
+            # metadata={
+            #     "depth_filenames": depth_filenames if len(depth_filenames) > 0 else None,
+            #     "depth_unit_scale_factor": self.config.depth_unit_scale_factor,
+            # },
         )
         return dataparser_outputs
 

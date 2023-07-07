@@ -27,6 +27,7 @@ import yaml
 
 from nerfstudio.configs.method_configs import all_methods
 from nerfstudio.data.datamanagers.base_datamanager import VanillaDataManagerConfig
+from nerfstudio.data.dataparsers.blender_dataparser import BlenderDataParserConfig
 from nerfstudio.engine.trainer import TrainerConfig
 from nerfstudio.pipelines.base_pipeline import Pipeline
 from nerfstudio.utils.rich_utils import CONSOLE
@@ -85,8 +86,14 @@ def eval_setup(
         Loaded config, pipeline module, corresponding checkpoint, and step
     """
     # load save config
+  
     config = yaml.load(config_path.read_text(), Loader=yaml.Loader)
     assert isinstance(config, TrainerConfig)
+
+    if isinstance(config.pipeline.datamanager.dataparser, BlenderDataParserConfig):
+        test_mode = "val"
+    # test_mode = "val"
+    print("TEST_MODE", test_mode)
 
     config.pipeline.datamanager._target = all_methods[config.method_name].pipeline.datamanager._target
     if eval_num_rays_per_chunk:
@@ -105,6 +112,7 @@ def eval_setup(
     pipeline.eval()
 
     # load checkpointed information
+    print("LOADING")
     checkpoint_path, step = eval_load_checkpoint(config, pipeline)
-
+    print("LOADED")
     return config, pipeline, checkpoint_path, step
