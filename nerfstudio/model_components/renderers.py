@@ -249,7 +249,8 @@ class DepthRenderer(nn.Module):
     def __init__(self, method: Literal["median", "mean", "mode"] = "median") -> None:
         super().__init__()
         self.method = method
-        self.method = "mode"
+        print("WHAT IS THIS DOING", self.method, "?")
+        self.method = "median"
 
     def forward(
         self,

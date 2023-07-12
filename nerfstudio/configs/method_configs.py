@@ -63,6 +63,8 @@ from nerfstudio.pipelines.base_pipeline import VanillaPipelineConfig
 from nerfstudio.pipelines.dynamic_batch import DynamicBatchPipelineConfig
 from nerfstudio.plugins.registry import discover_methods
 
+from nerfstudio.models.nero import NeROModelConfig
+
 method_configs: Dict[str, TrainerConfig] = {}
 descriptions = {
     "nerfacto": "Recommended real-time model tuned for real captures. This model will be continually updated.",
@@ -79,6 +81,7 @@ descriptions = {
     "generfacto": "Generative Text to NeRF model",
     "neus": "Implementation of NeuS. (slow)",
     "neus-facto": "Implementation of NeuS-Facto. (slow)",
+    "nero": "Implementation of NeRO. (slow)",
 }
 
 method_configs["nerfacto"] = TrainerConfig(
@@ -618,6 +621,39 @@ method_configs["neus-facto"] = TrainerConfig(
     vis="viewer",
 )
 
+method_configs["nero"] = TrainerConfig(
+    method_name="nero",
+    steps_per_eval_image=500,
+    steps_per_eval_batch=5000,
+    steps_per_save=20000,
+    steps_per_eval_all_images=1000000,  # set to a very large number so we don't eval with all images
+    max_num_iterations=100000,
+    mixed_precision=False,
+    pipeline=VanillaPipelineConfig(
+        datamanager=VanillaDataManagerConfig(
+            _target=VanillaDataManager[SDFDataset],
+            dataparser=SDFStudioDataParserConfig(),
+            train_num_rays_per_batch=1024,
+            eval_num_rays_per_batch=1024,
+            camera_optimizer=CameraOptimizerConfig(
+                mode="off", optimizer=AdamOptimizerConfig(lr=6e-4, eps=1e-8, weight_decay=1e-2)
+            ),
+        ),
+        model=NeROModelConfig(eval_num_rays_per_chunk=1024),
+    ),
+    optimizers={
+        "fields": {
+            "optimizer": AdamOptimizerConfig(lr=5e-4, eps=1e-15),
+            "scheduler": CosineDecaySchedulerConfig(warm_up_end=5000, learning_rate_alpha=0.05, max_steps=300000),
+        },
+        "field_background": {
+            "optimizer": AdamOptimizerConfig(lr=5e-4, eps=1e-15),
+            "scheduler": CosineDecaySchedulerConfig(warm_up_end=5000, learning_rate_alpha=0.05, max_steps=300000),
+        },
+    },
+    viewer=ViewerConfig(num_rays_per_chunk=1 << 15),
+    vis="viewer",
+)
 
 def merge_methods(methods, method_descriptions, new_methods, new_descriptions, overwrite=True):
     """Merge new methods and descriptions into existing methods and descriptions.

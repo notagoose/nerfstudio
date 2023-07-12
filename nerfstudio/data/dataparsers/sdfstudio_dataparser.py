@@ -45,7 +45,7 @@ class SDFStudioDataParserConfig(DataParserConfig):
     include_foreground_mask: bool = False
     """whether or not to load foreground mask"""
     downscale_factor: int = 1
-    scene_scale: float = 2.0
+    scene_scale: float = 1.0
     """
     Sets the bounding cube to have edge length of this size.
     The longest dimension of the axis-aligned bbox will be scaled to this value.
@@ -120,7 +120,7 @@ class SDFStudio(DataParser):
 
         # scene box from meta data
         meta_scene_box = meta["scene_box"]
-        aabb = torch.tensor(meta_scene_box["aabb"], dtype=torch.float32)
+        aabb = self.config.scene_scale * torch.tensor(meta_scene_box["aabb"], dtype=torch.float32)
         scene_box = SceneBox(
             aabb=aabb,
         )
