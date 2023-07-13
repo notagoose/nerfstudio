@@ -136,6 +136,7 @@ def generate_point_cloud(
             with torch.no_grad():
                 ray_bundle, _ = pipeline.datamanager.next_train(0)
                 outputs = pipeline.model(ray_bundle)
+                outputs["quality"] = ((outputs["rgb"])**2).sum(dim=-1)
             if rgb_output_name not in outputs:
                 CONSOLE.rule("Error", style="red")
                 CONSOLE.print(f"Could not find {rgb_output_name} in the model outputs", justify="center")
