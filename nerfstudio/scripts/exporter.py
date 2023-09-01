@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Tuple, Union, cast
@@ -351,6 +352,291 @@ class ExportPoissonMesh(Exporter):
 
 
 @dataclass
+class ExportDualContouring(Exporter):
+    """Export a point cloud and watertight envelope mesh
+    to use for PSR with envelope constraints."""
+
+    isosurface_threshold: float = 0.2
+    """The isosurface threshold for extraction. For SDF based methods the surface is the zero level set."""
+    max_depth: int = 10
+    """Marching cube resolution."""
+    num_points: int = 200000
+    """Number of points to generate. May result in less if outlier removal is used."""
+    remove_outliers: bool = True
+    """Remove outliers from the point cloud."""
+    normal_method: Literal["open3d", "model_output"] = "open3d"
+    """Method to estimate normals with."""
+    normal_output_name: str = "normals"
+    """Name of the normal output."""
+    depth_output_name: str = "depth"
+    """Name of the depth output."""
+    rgb_output_name: str = "rgb"
+    """Name of the RGB output."""
+    use_bounding_box: bool = True
+    """Only query points within the bounding box"""
+    bounding_box_min: Tuple[float, float, float] = (-1, -1, -1)
+    """Minimum of the bounding box, used if use_bounding_box is True."""
+    bounding_box_max: Tuple[float, float, float] = (1, 1, 1)
+    """Maximum of the bounding box, used if use_bounding_box is True."""
+    num_rays_per_batch: int = 32768
+    """Number of rays to evaluate per batch. Decrease if you run out of memory."""
+    std_ratio: float = 10.0
+    """Threshold based on STD of the average distances across the point cloud to remove outliers."""
+    reorient_normals: bool = True
+    """Whether to re-orient the point cloud normals based on view direction"""
+
+    def main(self) -> None:
+        """Main function."""
+        if not self.output_dir.exists():
+            self.output_dir.mkdir(parents=True)
+
+        _, pipeline, _, _ = eval_setup(self.load_config)
+
+        # Whether the normals should be estimated based on the point cloud.
+        estimate_normals = self.normal_method == "open3d"
+
+        pcd = generate_point_cloud(
+            pipeline=pipeline,
+            num_points=self.num_points,
+            remove_outliers=self.remove_outliers,
+            estimate_normals=estimate_normals,
+            rgb_output_name=self.rgb_output_name,
+            depth_output_name=self.depth_output_name,
+            normal_output_name=self.normal_output_name if self.normal_method == "model_output" else None,
+            use_bounding_box=self.use_bounding_box,
+            bounding_box_min=self.bounding_box_min,
+            bounding_box_max=self.bounding_box_max,
+            std_ratio=self.std_ratio,
+            reorient_normals=self.reorient_normals,
+        )
+        torch.cuda.empty_cache()
+
+        CONSOLE.print(f"[bold green]:white_check_mark: Generated {pcd}")
+        CONSOLE.print("Saving Point Cloud...")
+        tpcd = o3d.t.geometry.PointCloud.from_legacy(pcd)
+        # The legacy PLY writer converts colors to UInt8,
+        # let us do the same to save space.
+        tpcd.point.colors = (tpcd.point.colors * 255).to(o3d.core.Dtype.UInt8)  # type: ignore
+        o3d.t.io.write_point_cloud(str(self.output_dir / "point_cloud.ply"), tpcd)
+        print("\033[A\033[A")
+        CONSOLE.print("[bold green]:white_check_mark: Saving Point Cloud")
+
+        bounding_box_min = torch.cuda.FloatTensor(self.bounding_box_min)
+        bounding_box_max = torch.cuda.FloatTensor(self.bounding_box_max)
+
+        for param in pipeline.model.field.parameters():
+            param.requires_grad_(False)
+
+        points = torch.from_numpy(np.array(pcd.points)).cuda()
+        self.isosurface_threshold = 0.0
+
+        density = False
+        field = lambda x: cast(SDFField, pipeline.model.field).forward_geonetwork(x)[:, 0].contiguous()
+        if density:
+            field = lambda x: pipeline.model.field.density_fn(x)[:, 0].contiguous()
+            check_vals = field(points)
+            self.isosurface_threshold = torch.mean(check_vals).item()
+        print("ISOSURFACE THRESHOLD", self.isosurface_threshold)
+
+        def implicit_fn(x):
+            # with torch.no_grad():
+            if len(x.shape) == 1:
+                x = x[None, :]
+            val = field(x) - self.isosurface_threshold
+            return val
+
+        def normal_fn(x):
+            x = x.clone()
+            if len(x.shape) == 1:
+                x = x[None, :]
+            analytic = False
+            if analytic:
+                x.requires_grad_(True)
+                with torch.enable_grad():
+                    output = implicit_fn(x)
+                d_output = torch.ones_like(output, requires_grad=False)
+                gradients = torch.autograd.grad(
+                    outputs=output,
+                    inputs=x,
+                    grad_outputs=d_output,
+                    create_graph=False,
+                    retain_graph=False,
+                    only_inputs=True,
+                )[0]
+            else:
+                gradients = torch.zeros_like(x)
+                eps = 1e-6
+                for i in range(3):
+                    eps_vector = torch.zeros_like(x)
+                    eps_vector[..., i] = eps
+                    gradients[..., i] = (implicit_fn(x + eps_vector) - implicit_fn(x - eps_vector)) / (2 * eps)
+            normal = gradients / torch.clamp(torch.linalg.norm(gradients, dim=-1)[..., None], min=1e-20)
+            x = x.detach()
+            print("NORMALS", normal)
+            print("GRADIENTS", gradients)
+            if not torch.isfinite(normal).all():
+                mask = ~torch.isfinite(normal).all(dim=-1)
+                print("NOT FINITE")
+                print(normal[mask, :], normal.dtype)
+                print(gradients[mask, :], gradients.dtype)
+                print(x[mask, :], x.dtype)
+                normal[mask, :] = 0
+                normal[mask, 0] = 1
+            return normal.detach()
+
+        filename = self.output_dir / "dual_contouring.ply"
+        # points = None
+        CONSOLE.print("Extracting mesh with dual contouring... which may take a while")
+        aabb = torch.stack([torch.Tensor(self.bounding_box_min), torch.Tensor(self.bounding_box_max)])
+        mesh = dual_contour(implicit_fn, normal_fn, points, aabb, 4, 6)  # 6, 10)
+        o3d.io.write_triangle_mesh(str(filename), mesh)
+
+
+@dataclass
+class ExportEnvelopePoisson(Exporter):
+    """Export a point cloud and watertight envelope mesh
+    to use for PSR with envelope constraints."""
+    poisson_executable: str = ""
+    """The location from the Poisson Surface Reconstruction executable."""
+    isosurface_threshold: float = 0.2
+    """The isosurface threshold for extraction. For SDF based methods the surface is the zero level set."""
+    resolution: int = 512
+    """Marching cube resolution."""
+    num_points: int = 200000
+    """Number of points to generate. May result in less if outlier removal is used."""
+    remove_outliers: bool = True
+    """Remove outliers from the point cloud."""
+    normal_method: Literal["open3d", "model_output"] = "open3d"
+    """Method to estimate normals with."""
+    normal_output_name: str = "normals"
+    """Name of the normal output."""
+    depth_output_name: str = "depth"
+    """Name of the depth output."""
+    rgb_output_name: str = "rgb"
+    """Name of the RGB output."""
+    use_bounding_box: bool = True
+    """Only query points within the bounding box"""
+    bounding_box_min: Tuple[float, float, float] = (-1, -1, -1)
+    """Minimum of the bounding box, used if use_bounding_box is True."""
+    bounding_box_max: Tuple[float, float, float] = (1, 1, 1)
+    """Maximum of the bounding box, used if use_bounding_box is True."""
+    num_rays_per_batch: int = 32768
+    """Number of rays to evaluate per batch. Decrease if you run out of memory."""
+    texture_method: Literal["point_cloud", "nerf"] = "nerf"
+    """Method to texture the mesh with. Either 'point_cloud' or 'nerf'."""
+    std_ratio: float = 10.0
+    """Threshold based on STD of the average distances across the point cloud to remove outliers."""
+    reorient_normals: bool = True
+    """Whether to re-orient the point cloud normals based on view direction"""
+    px_per_uv_triangle: int = 4
+    """Number of pixels per UV triangle."""
+    unwrap_method: Literal["xatlas", "custom"] = "xatlas"
+    """The method to use for unwrapping the mesh."""
+    num_pixels_per_side: int = 2048
+    """If using xatlas for unwrapping, the pixels per side of the texture image."""
+    target_num_faces: Optional[int] = 50000
+    """Target number of faces for the mesh to texture."""
+
+    def main(self) -> None:
+        """Main function."""
+        if not self.output_dir.exists():
+            self.output_dir.mkdir(parents=True)
+
+        _, pipeline, _, _ = eval_setup(self.load_config)
+
+        CONSOLE.print("Extracting mesh with marching cubes... which may take a while")
+
+        assert (
+            self.resolution % 512 == 0
+        ), f"""resolution must be divisible by 512, got {self.resolution}.
+        This is important because the algorithm uses a multi-resolution approach
+        to evaluate the SDF where the minimum resolution is 512."""
+
+        bounding_box_min = torch.cuda.FloatTensor(self.bounding_box_min)
+        bounding_box_max = torch.cuda.FloatTensor(self.bounding_box_max)
+
+        def implicit_fn(x):
+            lower_bounds = 0.99 * bounding_box_min + 0.01 * bounding_box_max
+            upper_bounds = 0.01 * bounding_box_min + 0.99 * bounding_box_max
+
+            val = pipeline.model.field.density_fn(x)[:, 0].contiguous()
+            mask = torch.logical_or(
+                torch.any(x > upper_bounds[None, :], dim=-1), torch.any(x < lower_bounds[None, :], dim=-1)
+            )
+            val[mask] = 1
+            return val
+
+        # Extract mesh using marching cubes for sdf at a multi-scale resolution.
+        multi_res_mesh = generate_mesh_with_multires_marching_cubes(
+            geometry_callable_field=implicit_fn,
+            resolution=self.resolution,
+            bounding_box_min=self.bounding_box_min,
+            bounding_box_max=self.bounding_box_max,
+            isosurface_threshold=self.isosurface_threshold,
+            coarse_mask=None,
+        )
+        envelope_filename = self.output_dir / "envelope.ply"
+        multi_res_mesh.export(envelope_filename)
+
+        # Whether the normals should be estimated based on the point cloud.
+        estimate_normals = self.normal_method == "open3d"
+
+        pcd = generate_point_cloud(
+            pipeline=pipeline,
+            num_points=self.num_points,
+            remove_outliers=self.remove_outliers,
+            estimate_normals=estimate_normals,
+            rgb_output_name=self.rgb_output_name,
+            depth_output_name=self.depth_output_name,
+            normal_output_name=self.normal_output_name if self.normal_method == "model_output" else None,
+            use_bounding_box=self.use_bounding_box,
+            bounding_box_min=self.bounding_box_min,
+            bounding_box_max=self.bounding_box_max,
+            std_ratio=self.std_ratio,
+            reorient_normals=self.reorient_normals,
+        )
+        torch.cuda.empty_cache()
+
+        pcd_filename = str(self.output_dir / "point_cloud.ply")
+        CONSOLE.print(f"[bold green]:white_check_mark: Generated {pcd}")
+        CONSOLE.print("Saving Point Cloud...")
+        tpcd = o3d.t.geometry.PointCloud.from_legacy(pcd)
+        # The legacy PLY writer converts colors to UInt8,
+        # let us do the same to save space.
+        tpcd.point.colors = (tpcd.point.colors * 255).to(o3d.core.Dtype.UInt8)  # type: ignore
+        o3d.t.io.write_point_cloud(pcd_filename, tpcd)
+        print("\033[A\033[A")
+        CONSOLE.print("[bold green]:white_check_mark: Saving Point Cloud")
+
+        out_filename = str(self.output_dir / "poisson_mesh.ply")
+
+        subprocess.run(
+            [
+                self.poisson_location,
+                "--in", pcd_filename,
+                "--envelope", envelope_filename,
+                "--out", out_filename
+            ]
+        )
+
+        # This will texture the mesh with NeRF and export to a mesh.obj file
+        # and a material and texture file
+        if self.texture_method == "nerf":
+            # load the mesh from the poisson reconstruction
+            mesh = get_mesh_from_filename(
+                out_filename, target_num_faces=self.target_num_faces
+            )
+            CONSOLE.print("Texturing mesh with NeRF")
+            texture_utils.export_textured_mesh(
+                mesh,
+                pipeline,
+                self.output_dir,
+                px_per_uv_triangle=self.px_per_uv_triangle if self.unwrap_method == "custom" else None,
+                unwrap_method=self.unwrap_method,
+                num_pixels_per_side=self.num_pixels_per_side,
+            )
+
+@dataclass
 class ExportMarchingCubesMesh(Exporter):
     """Export a mesh using marching cubes."""
 
@@ -381,7 +667,7 @@ class ExportMarchingCubesMesh(Exporter):
         _, pipeline, _, _ = eval_setup(self.load_config)
 
         # TODO: Make this work with Density Field
-        assert hasattr(pipeline.model.config, "sdf_field"), "Model must have an SDF field."
+        # assert hasattr(pipeline.model.config, "sdf_field"), "Model must have an SDF field."
 
         CONSOLE.print("Extracting mesh with marching cubes... which may take a while")
 
@@ -391,11 +677,20 @@ class ExportMarchingCubesMesh(Exporter):
         This is important because the algorithm uses a multi-resolution approach
         to evaluate the SDF where the minimum resolution is 512."""
 
+        density = False
+        field = lambda x: cast(SDFField, pipeline.model.field).forward_geonetwork(x)[:, 0].contiguous()
+        if density:
+            field = lambda x: pipeline.model.field.density_fn(x)[:, 0].contiguous() - 200
+
+        def cube_function(xyz):
+            if len(xyz.shape) == 1:
+                xyz = xyz[None, :]
+            return torch.max(torch.abs(xyz), dim=-1).values - 2.8
+
+        field = cube_function
         # Extract mesh using marching cubes for sdf at a multi-scale resolution.
         multi_res_mesh = generate_mesh_with_multires_marching_cubes(
-            geometry_callable_field=lambda x: cast(SDFField, pipeline.model.field)
-            .forward_geonetwork(x)[:, 0]
-            .contiguous(),
+            geometry_callable_field=field,
             resolution=self.resolution,
             bounding_box_min=self.bounding_box_min,
             bounding_box_max=self.bounding_box_max,
@@ -451,6 +746,8 @@ Commands = tyro.conf.FlagConversionOff[
         Annotated[ExportPointCloud, tyro.conf.subcommand(name="pointcloud")],
         Annotated[ExportTSDFMesh, tyro.conf.subcommand(name="tsdf")],
         Annotated[ExportPoissonMesh, tyro.conf.subcommand(name="poisson")],
+        Annotated[ExportDualContouring, tyro.conf.subcommand(name="dual-contouring")],
+        Annotated[ExportEnvelopePoisson, tyro.conf.subcommand(name="envelope")],
         Annotated[ExportMarchingCubesMesh, tyro.conf.subcommand(name="marching-cubes")],
         Annotated[ExportCameraPoses, tyro.conf.subcommand(name="cameras")],
     ]
