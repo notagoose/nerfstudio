@@ -142,10 +142,16 @@ class RenderStateMachine(threading.Thread):
                             device=self.viewer.get_model().device,
                         )
                     with background_color_override_context(background_color), torch.no_grad():
-                        outputs = self.viewer.get_model().get_outputs_for_camera_ray_bundle(camera_ray_bundle)
+                        if self.viewer.get_model().moo():
+                            outputs = self.viewer.get_model().get_outputs_for_camera(camera[0])
+                        else:
+                            outputs = self.viewer.get_model().get_outputs_for_camera_ray_bundle(camera_ray_bundle)
                 else:
                     with torch.no_grad():
-                        outputs = self.viewer.get_model().get_outputs_for_camera_ray_bundle(camera_ray_bundle)
+                        if self.viewer.get_model().moo():
+                            outputs = self.viewer.get_model().get_outputs_for_camera(camera[0])
+                        else:
+                            outputs = self.viewer.get_model().get_outputs_for_camera_ray_bundle(camera_ray_bundle)
                 self.viewer.get_model().train()
         num_rays = len(camera_ray_bundle)
         render_time = vis_t.duration
@@ -205,8 +211,14 @@ class RenderStateMachine(threading.Thread):
         self.viewer.update_colormap_options(
             dimensions=outputs[output_render].shape[-1], dtype=outputs[output_render].dtype
         )
+        if self.viewer.get_model().moo():
+            selected_image = outputs["rgb"].reshape(outputs["dim"][0], outputs["dim"][1], 3)
+        else:
+            selected_image = outputs[self.viewer.control_panel.output_render]
+
         selected_output = colormaps.apply_colormap(
-            image=outputs[self.viewer.control_panel.output_render],
+            # image=outputs[self.viewer.control_panel.output_render],
+            image = selected_image,
             colormap_options=self.viewer.control_panel.colormap_options,
         )
 
@@ -225,8 +237,6 @@ class RenderStateMachine(threading.Thread):
             )
             selected_output = torch.cat([selected_output[:, :split_index], split_output[:, split_index:]], dim=1)
             selected_output[:, split_index] = torch.tensor([0.133, 0.157, 0.192], device=selected_output.device)
-
-        selected_output = (selected_output * 255).type(torch.uint8)
 
         self.viewer.viser_server.set_background_image(
             selected_output.cpu().numpy(),

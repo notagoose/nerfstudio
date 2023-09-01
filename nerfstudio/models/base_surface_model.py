@@ -48,6 +48,7 @@ from nerfstudio.model_components.renderers import (
     DepthRenderer,
     RGBRenderer,
     SemanticRenderer,
+    QualityRenderer,
 )
 from nerfstudio.model_components.scene_colliders import AABBBoxCollider, NearFarCollider
 from nerfstudio.models.base_model import Model, ModelConfig
@@ -157,8 +158,9 @@ class SurfaceModel(Model):
         )
         self.renderer_rgb = RGBRenderer(background_color=background_color)
         self.renderer_accumulation = AccumulationRenderer()
-        self.renderer_depth = DepthRenderer(method="expected")
+        self.renderer_depth = DepthRenderer(method="isolevel")
         self.renderer_normal = SemanticRenderer()
+        self.renderer_quality = QualityRenderer()
 
         # losses
         self.rgb_loss = L1Loss()
@@ -217,9 +219,12 @@ class SurfaceModel(Model):
         bg_transmittance = samples_and_field_outputs["bg_transmittance"]
 
         rgb = self.renderer_rgb(rgb=field_outputs[FieldHeadNames.RGB], weights=weights)
-        depth = self.renderer_depth(weights=weights, ray_samples=ray_samples)
+        depth = self.renderer_depth(weights=field_outputs[FieldHeadNames.SDF], ray_samples=ray_samples)
+        quality = self.renderer_quality(weights=field_outputs[FieldHeadNames.SDF], ray_samples=ray_samples)
         # the rendered depth is point-to-point distance and we should convert to depth
         depth = depth / ray_bundle.metadata["directions_norm"]
+        # check = ray_bundle.metadata["directions_norm"]
+        # print(check.min().item(), check.max().item(), check.shape, "CHECK RAY BUNDLE")
 
         normal = self.renderer_normal(semantics=field_outputs[FieldHeadNames.NORMALS], weights=weights)
         accumulation = self.renderer_accumulation(weights=weights)

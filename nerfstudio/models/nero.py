@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Type
+from pathlib import Path
 
 from nerfstudio.cameras.rays import RayBundle
 from nerfstudio.engine.callbacks import (
@@ -30,14 +31,18 @@ from nerfstudio.engine.callbacks import (
 from nerfstudio.field_components.field_heads import FieldHeadNames
 from nerfstudio.model_components.ray_samplers import NeuSSampler
 from nerfstudio.models.base_surface_model import SurfaceModel, SurfaceModelConfig
+from nerfstudio.field_components.spatial_distortions import SceneContraction
 
 from nerfstudio.fields.nero_field import NeROFieldConfig, NeROField
+from nerfstudio.utils.custom_eval_utils import eval_setup
 
 @dataclass
 class NeROModelConfig(SurfaceModelConfig):
     """NeRO Model Config"""
 
     _target: Type = field(default_factory=lambda: NeROModel)
+    load_config: str = ""
+    """Config for model to load"""
     num_samples: int = 64
     """Number of uniform samples"""
     num_samples_importance: int = 64
@@ -71,13 +76,31 @@ class NeROModel(SurfaceModel):
             base_variance=self.config.base_variance,
         )
 
-        nero_config = NeROFieldConfig()
+        # nero_config = NeROFieldConfig()
+        # self.field = NeROField(
+        #     config=nero_config,
+        #     aabb=self.scene_box.aabb,
+        #     spatial_distortion=self.scene_contraction,
+        #     num_images=self.num_train_data,
+        #     use_average_appearance_embedding=self.config.use_average_appearance_embedding,
+        # )
+        _, pipeline, _, _ = eval_setup(Path(self.config.load_config), load_model=False)
+
         self.field = NeROField(
-            config=nero_config,
-            aabb=self.scene_box.aabb,
-            spatial_distortion=self.scene_contraction,
+            self.scene_box.aabb,
+            hidden_dim=64,
+            num_levels=2,
+            max_res=2048,
+            log2_hashmap_size=19,
+            hidden_dim_color=64,
+            hidden_dim_transient=64,
+            spatial_distortion=SceneContraction(order=float("inf")),
             num_images=self.num_train_data,
-            use_average_appearance_embedding=self.config.use_average_appearance_embedding,
+            use_pred_normals=False,
+            use_average_appearance_embedding=True,
+            appearance_embedding_dim=32,
+            implementation="torch",
+            initial_model=pipeline.model.field,
         )
 
         self.anneal_end = 50000
@@ -104,7 +127,9 @@ class NeROModel(SurfaceModel):
         return callbacks
 
     def sample_and_forward_field(self, ray_bundle: RayBundle) -> Dict:
+        # ray_samples = self.sampler(ray_bundle, sdf_fn=self.field.get_sdf)
         ray_samples = self.sampler(ray_bundle, sdf_fn=self.field.get_sdf)
+
         field_outputs = self.field(ray_samples, return_alphas=True)
         weights, transmittance = ray_samples.get_weights_and_transmittance_from_alphas(
             field_outputs[FieldHeadNames.ALPHA]

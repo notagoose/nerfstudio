@@ -3,7 +3,9 @@ import math
 import torch
 import numpy as np
 
-
+def find_nan(t):
+    return
+    # assert not t.isnan().any()
 
 def generalized_binomial_coeff(a, k):
     """Compute generalized binomial coefficients."""
@@ -80,9 +82,10 @@ def generate_ide_fn(deg_view):
             mat[k, i] = sph_harm_coeff(l, m, k)
 
     mat = torch.from_numpy(mat.astype(np.float32)).cuda()
+    find_nan(mat)
     ml_array = torch.from_numpy(ml_array.astype(np.float32)).cuda()
 
-    def integrated_dir_enc_fn(xyz, kappa_inv):
+    def integrated_dir_enc_fn(xyz, kappa_inv, timer):
         """Function returning integrated directional encoding (IDE).
 
         Args:
@@ -93,23 +96,68 @@ def generate_ide_fn(deg_view):
         Returns:
           An array with the resulting IDE.
         """
+        # with torch.cuda.amp.autocast(enabled=False):
+
+        timer.start("IDE-A1")
         x = xyz[..., 0:1]
         y = xyz[..., 1:2]
         z = xyz[..., 2:3]
+        timer.stop()
 
+        timer.start("IDE-B1")
         # Compute z Vandermonde matrix.
         vmz = torch.concat([z**i for i in range(mat.shape[0])], dim=-1)
-
+        timer.stop()
+        timer.start("IDE-B2")
+        find_nan(vmz)
+        timer.stop()
+        
+        timer.start("IDE-ALT-C1")
+        vmxy = torch.ones((x.shape[0], ml_array.shape[1],), device=x.device, dtype=torch.cfloat)
+        mask = ml_array[0,:] != 0
+        vmxy[:,mask] = torch.pow(x+1j*y, ml_array[:1,mask])
+        timer.stop()
         # Compute x+iy Vandermonde matrix.
-        vmxy = torch.concat([(x + 1j * y)**m for m in ml_array[0, :]], dim=-1)
+        # vmxy_eles = []
+        # for m in ml_array[0,:]:
+        #   timer.start("IDE-C1")
+        #   if m == 0:
+        #     vmxy_eles.append((x+1j*y)*m + 1)
+        #   else:
+        #     vmxy_eles.append((x+1j*y)**m)
+        #   timer.stop()
+        # timer.start("IDE-C2")
+        # vmxy = torch.concat(vmxy_eles, dim=-1)
+        # timer.stop()
+        # timer.start("IDE-C3")
+        # find_nan(vmxy)
+        # find_nan(mat)
+        # timer.stop()
 
         # Get spherical harmonics.
-        sph_harms = vmxy * torch.matmul(vmz, mat)
+        with torch.cuda.amp.autocast(enabled=False):
+          timer.start("IDE-D1")
+          sph_harms = vmxy * torch.matmul(vmz, mat)
+          timer.stop()
 
         # Apply attenuation function using the von Mises-Fisher distribution
         # concentration parameter, kappa.
+        timer.start("IDE-E1")
         sigma = 0.5 * ml_array[1, :] * (ml_array[1, :] + 1)
+        timer.stop()
+        timer.start("IDE-E2")
+        find_nan(sph_harms)
+        find_nan(kappa_inv)
+
+        find_nan(sigma)
+        timer.stop()
+
+        timer.start("IDE-F1")
         ide = sph_harms * torch.exp(-sigma * kappa_inv)
+        timer.stop()
+        timer.start("IDE-F2")
+        find_nan(ide)
+        timer.stop()
 
         # Split into real and imaginary parts and return
         return torch.concat([torch.real(ide), torch.imag(ide)], dim=-1)

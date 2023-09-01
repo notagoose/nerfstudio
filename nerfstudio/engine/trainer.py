@@ -152,6 +152,11 @@ class Trainer:
             local_rank=self.local_rank,
             grad_scaler=self.grad_scaler,
         )
+        
+        if self.pipeline.model.moo():
+            print("MOO", self.base_dir)
+            self.pipeline.model.config.save_dir = self.base_dir
+        
         self.optimizers = self.setup_optimizers()
 
         # set up viewer if enabled
@@ -253,6 +258,7 @@ class Trainer:
 
                         # time the forward pass
                         loss, loss_dict, metrics_dict = self.train_iteration(step)
+                        # print("LOSS", loss)
 
                         # training callbacks after the training iteration
                         for callback in self.callbacks:
@@ -432,6 +438,7 @@ class Trainer:
             self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         # save the checkpoint
         ckpt_path: Path = self.checkpoint_dir / f"step-{step:09d}.ckpt"
+        mesh_path: Path = self.checkpoint_dir / f"mesh-{step:09d}.ply"
         torch.save(
             {
                 "step": step,
@@ -443,11 +450,15 @@ class Trainer:
             },
             ckpt_path,
         )
+        print("SAVING\nSAVING\nSAVING")
+        if self.pipeline.model.moo():
+            self.pipeline.model.save_mesh(mesh_path)
+
         # possibly delete old checkpoints
         if self.config.save_only_latest_checkpoint:
             # delete everything else in the checkpoint folder
             for f in self.checkpoint_dir.glob("*"):
-                if f != ckpt_path:
+                if f != ckpt_path and f != mesh_path:
                     f.unlink()
 
     @profiler.time_function
@@ -470,7 +481,6 @@ class Trainer:
                 loss /= self.gradient_accumulation_steps
             self.grad_scaler.scale(loss).backward()  # type: ignore
         self.optimizers.optimizer_scaler_step_all(self.grad_scaler)
-
         if self.config.log_gradients:
             total_grad = 0
             for tag, value in self.pipeline.model.named_parameters():

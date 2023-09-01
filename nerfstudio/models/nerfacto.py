@@ -126,7 +126,8 @@ class NerfactoModelConfig(ModelConfig):
     """Which implementation to use for the model."""
     appearance_embed_dim: int = 32
     """Dimension of the appearance embedding."""
-
+    geo_feat_dim: int = 15
+    """Dimension of the geometric features."""
 
 class NerfactoModel(Model):
     """Nerfacto model
@@ -160,6 +161,7 @@ class NerfactoModel(Model):
             use_pred_normals=self.config.predict_normals,
             use_average_appearance_embedding=self.config.use_average_appearance_embedding,
             appearance_embedding_dim=self.config.appearance_embed_dim,
+            geo_feat_dim=self.config.geo_feat_dim,
             implementation=self.config.implementation,
         )
 

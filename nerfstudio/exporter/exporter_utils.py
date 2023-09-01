@@ -93,7 +93,7 @@ def generate_point_cloud(
     bounding_box_min: Tuple[float, float, float] = (-1.0, -1.0, -1.0),
     bounding_box_max: Tuple[float, float, float] = (1.0, 1.0, 1.0),
     std_ratio: float = 10.0,
-    reorient_normals: bool = False,
+    reorient_normals: bool = True,
 ) -> o3d.geometry.PointCloud:
     """Generate a point cloud from a nerf.
 
@@ -163,7 +163,7 @@ def generate_point_cloud(
                 normal = (normal * 2.0) - 1.0
             point = ray_bundle.origins + ray_bundle.directions * depth
             view_direction = ray_bundle.directions
-
+            
             if use_bounding_box:
                 comp_l = torch.tensor(bounding_box_min, device=point.device)
                 comp_m = torch.tensor(bounding_box_max, device=point.device)
@@ -171,6 +171,17 @@ def generate_point_cloud(
                     comp_l < comp_m
                 ), f"Bounding box min {bounding_box_min} must be smaller than max {bounding_box_max}"
                 mask = torch.all(torch.concat([point > comp_l, point < comp_m], dim=-1), dim=-1)
+                point = point[mask]
+                rgb = rgb[mask]
+                view_direction = view_direction[mask]
+                variance = variance[mask]
+                if normal is not None:
+                    normal = normal[mask]
+            
+            use_variance = False
+            if use_variance:
+                mask = variance[:,0] < 1e1
+                # print("RATIO", mask.sum(), mask.shape, mask.sum() / mask.shape[0])
                 point = point[mask]
                 rgb = rgb[mask]
                 view_direction = view_direction[mask]
@@ -231,6 +242,7 @@ def generate_point_cloud(
     # re-orient the normals
     if reorient_normals:
         normals = torch.from_numpy(np.array(pcd.normals)).float()
+        print("HEY", view_directions.shape, normals.shape)
         mask = torch.sum(view_directions * normals, dim=-1) > 0
         normals[mask] *= -1
         pcd.normals = o3d.utility.Vector3dVector(normals.double().cpu().numpy())

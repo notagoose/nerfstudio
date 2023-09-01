@@ -68,6 +68,16 @@ class Field(nn.Module):
         return density
 
     @abstractmethod
+    def get_density_at_points(
+        self, positions: Tensor
+    ) -> Tuple[Shaped[Tensor, "*batch 1"], Float[Tensor, "*batch num_features"]]:
+        """Computes and returns the densities. Returns a tensor of densities and a tensor of features.
+
+        Args:
+            positions: Positions to compute density.
+        """
+    
+    @abstractmethod
     def get_density(
         self, ray_samples: RaySamples
     ) -> Tuple[Shaped[Tensor, "*batch 1"], Float[Tensor, "*batch num_features"]]:

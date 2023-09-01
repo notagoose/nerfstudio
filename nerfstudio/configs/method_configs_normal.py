@@ -29,7 +29,6 @@ from nerfstudio.configs.external_methods import get_external_methods
 
 from nerfstudio.data.datamanagers.random_cameras_datamanager import RandomCamerasDataManagerConfig
 from nerfstudio.data.datamanagers.base_datamanager import VanillaDataManager, VanillaDataManagerConfig
-from nerfstudio.data.datamanagers.full_datamanager import FullDataManager, FullDataManagerConfig
 
 from nerfstudio.data.dataparsers.blender_dataparser import BlenderDataParserConfig
 from nerfstudio.data.dataparsers.dnerf_dataparser import DNeRFDataParserConfig
@@ -64,9 +63,6 @@ from nerfstudio.pipelines.base_pipeline import VanillaPipelineConfig
 from nerfstudio.pipelines.dynamic_batch import DynamicBatchPipelineConfig
 from nerfstudio.plugins.registry import discover_methods
 
-from nerfstudio.models.nero import NeROModelConfig
-from nerfstudio.models.mesh import MeshModelConfig
-
 method_configs: Dict[str, TrainerConfig] = {}
 descriptions = {
     "nerfacto": "Recommended real-time model tuned for real captures. This model will be continually updated.",
@@ -84,7 +80,6 @@ descriptions = {
     "neus": "Implementation of NeuS. (slow)",
     "neus-facto": "Implementation of NeuS-Facto. (slow)",
     "nero": "Implementation of NeRO. (slow)",
-    "mesh": "Post-extraction mesh optimization (fast)"
 }
 
 method_configs["nerfacto"] = TrainerConfig(
@@ -122,7 +117,7 @@ method_configs["nerfacto"] = TrainerConfig(
 method_configs["nerfacto-big"] = TrainerConfig(
     method_name="nerfacto",
     steps_per_eval_batch=500,
-    steps_per_save=20000,
+    steps_per_save=2000,
     max_num_iterations=100000,
     mixed_precision=True,
     pipeline=VanillaPipelineConfig(
@@ -164,7 +159,7 @@ method_configs["nerfacto-big"] = TrainerConfig(
 method_configs["nerfacto-huge"] = TrainerConfig(
     method_name="nerfacto",
     steps_per_eval_batch=500,
-    steps_per_save=20000,
+    steps_per_save=2000,
     max_num_iterations=100000,
     mixed_precision=True,
     pipeline=VanillaPipelineConfig(
@@ -618,83 +613,6 @@ method_configs["neus-facto"] = TrainerConfig(
         "field_background": {
             "optimizer": AdamOptimizerConfig(lr=5e-4, eps=1e-15),
             "scheduler": CosineDecaySchedulerConfig(warm_up_end=500, learning_rate_alpha=0.05, max_steps=20001),
-        },
-    },
-    viewer=ViewerConfig(num_rays_per_chunk=1 << 15),
-    vis="viewer",
-)
-
-method_configs["nero"] = TrainerConfig(
-    method_name="nero",
-    steps_per_eval_image=500,
-    steps_per_eval_batch=5000,
-    steps_per_save=20000,
-    steps_per_eval_all_images=1000000,  # set to a very large number so we don't eval with all images
-    max_num_iterations=100000,
-    mixed_precision=False,
-    pipeline=VanillaPipelineConfig(
-        datamanager=VanillaDataManagerConfig(
-            _target=VanillaDataManager[SDFDataset],
-            dataparser=SDFStudioDataParserConfig(),
-            train_num_rays_per_batch=1024,
-            eval_num_rays_per_batch=1024,
-            camera_optimizer=CameraOptimizerConfig(
-                mode="off", optimizer=AdamOptimizerConfig(lr=6e-4, eps=1e-8, weight_decay=1e-2)
-            ),
-        ),
-        model=NeROModelConfig(eval_num_rays_per_chunk=1024),
-    ),
-    optimizers={
-        "fields": {
-            "optimizer": AdamOptimizerConfig(lr=5e-4, eps=1e-15),
-            "scheduler": CosineDecaySchedulerConfig(warm_up_end=5000, learning_rate_alpha=0.05, max_steps=300000),
-        },
-        "field_background": {
-            "optimizer": AdamOptimizerConfig(lr=5e-4, eps=1e-15),
-            "scheduler": CosineDecaySchedulerConfig(warm_up_end=5000, learning_rate_alpha=0.05, max_steps=300000),
-        },
-    },
-    viewer=ViewerConfig(num_rays_per_chunk=1 << 15),
-    vis="viewer",
-)
-
-GRADIENT_ACCUMULATION_STEPS = 5 #10
-
-method_configs["mesh"] = TrainerConfig(
-    method_name="mesh",
-    steps_per_eval_batch=500//GRADIENT_ACCUMULATION_STEPS,
-    steps_per_save=1000//GRADIENT_ACCUMULATION_STEPS,
-    gradient_accumulation_steps=GRADIENT_ACCUMULATION_STEPS,
-    max_num_iterations=30000//GRADIENT_ACCUMULATION_STEPS,
-    mixed_precision=True,
-    pipeline=VanillaPipelineConfig(
-        datamanager=FullDataManagerConfig(
-            dataparser=NerfstudioDataParserConfig(),
-            train_num_rays_per_batch=4096,
-            eval_num_rays_per_batch=4096,
-            camera_optimizer=CameraOptimizerConfig(
-                mode="SO3xR3",
-                optimizer=AdamOptimizerConfig(lr=6e-4, eps=1e-8, weight_decay=1e-2),
-                scheduler=ExponentialDecaySchedulerConfig(lr_final=6e-6, max_steps=200000//GRADIENT_ACCUMULATION_STEPS),
-            ),
-        ),
-        model=MeshModelConfig(eval_num_rays_per_chunk=1 << 15),
-    ),
-    optimizers={
-        "rgb_params": {
-            "optimizer": AdamOptimizerConfig(lr=0e-2, eps=1e-15, weight_decay=0),
-            "scheduler": ExponentialDecaySchedulerConfig(
-                lr_final=4e-5,
-                max_steps=200000//GRADIENT_ACCUMULATION_STEPS,
-            ),
-        },
-        "vertex_offsets": {
-            "optimizer": AdamOptimizerConfig(lr=0e-2, eps=1e-15, weight_decay=0),
-            "scheduler": ExponentialDecaySchedulerConfig(
-                lr_final=4e-5,
-                max_steps=200000//GRADIENT_ACCUMULATION_STEPS,
-                warmup_steps=50000//GRADIENT_ACCUMULATION_STEPS,
-            ),
         },
     },
     viewer=ViewerConfig(num_rays_per_chunk=1 << 15),

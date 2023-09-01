@@ -246,11 +246,13 @@ class DepthRenderer(nn.Module):
         method: Depth calculation method.
     """
 
-    def __init__(self, method: Literal["median", "mean", "mode"] = "median") -> None:
+    def __init__(self, method: Literal["median", "mean", "mode", "isolevel", "expected"] = "median") -> None:
         super().__init__()
         self.method = method
-        print("WHAT IS THIS DOING", self.method, "?")
-        self.method = "median"
+        if method == "expected":
+            self.method = "mean"
+        # print("WHAT IS THIS DOING", self.method, "?")
+        # self.method = "median"
 
     def forward(
         self,
@@ -316,6 +318,12 @@ class DepthRenderer(nn.Module):
             mode_index = torch.argmax(weights, dim=-2)  # [..., 1]
             mode_depth = torch.gather(steps[..., 0], dim=-1, index=mode_index)  # [..., 1]
             return mode_depth
+        if self.method == "isolevel":
+            eps = 1e-6
+            steps = (ray_samples.frustums.starts + ray_samples.frustums.ends) / 2
+            mode_index = torch.argmin(torch.abs(weights), dim=-2)  # [..., 1]
+            mode_depth = torch.gather(steps[..., 0], dim=-1, index=mode_index)  # [..., 1]
+            return mode_depth
         raise NotImplementedError(f"Method {self.method} not implemented")
 
 
@@ -362,21 +370,22 @@ class QualityRenderer(nn.Module):
                 mean = np.sum(xs * ys) / (np.sum(ys) + eps)
                 median = xs[np.searchsorted(np.cumsum(ys), 0.5, side="left").clip(0, xs.shape[0]-1)]
                 mode = xs[np.argmax(ys)]
-                if mean < depth_range[0] or mean > depth_range[1]:
-                    continue
+                # if mean < depth_range[0] or mean > depth_range[1]:
+                #     continue
                 count += 1
-                endpoint = max([4.0, mean, median, mode])
-                mask = xs < endpoint
+                # endpoint = max([4.0, mean, median, mode])
+                mask = np.logical_and(xs < 3, xs > 0)
                 plt.plot(xs[mask], ys[mask], ls=":")
                 # plt.plot(xs, ys, ls=":")
-                plt.axvline(mean, c="purple", ls="--", label="Mean")
-                plt.axvline(median, c="red", ls="--", label="Median")
-                plt.axvline(mode, c="orange", ls="--", label="Mode")
+                # plt.axvline(mean, c="purple", ls="--", label="Mean")
+                # plt.axvline(median, c="red", ls="--", label="Median")
+                # plt.axvline(mode, c="orange", ls="--", label="Mode")
+                plt.xlim(0, 3.0)
                 plt.xlabel("Depth")
                 plt.ylabel("Weight")
                 plt.title(f"Weight Distribution Along Ray With Variance {var[i].item():.5f}")
-                plt.legend()
-                plt.savefig(f"./temp/helmet_plots_test/{var[i].item():.5f}.jpg")
+                # plt.legend()
+                plt.savefig(f"./temp/helmet_sdf_test/{var[i].item():.5f}.jpg")
                 plt.clf()
                 if count >= 5:
                     break

@@ -134,12 +134,19 @@ def _render_trajectory_video(
                     with renderers.background_color_override_context(
                         crop_data.background_color.to(pipeline.device)
                     ), torch.no_grad():
-                        outputs = pipeline.model.get_outputs_for_camera_ray_bundle(camera_ray_bundle)
+                        if pipeline.model.moo():
+                            outputs = pipeline.model.get_outputs_for_camera_reshaped(cameras[camera_idx])
+                        else:
+                            outputs = pipeline.model.get_outputs_for_camera_ray_bundle(camera_ray_bundle)
                 else:
                     with torch.no_grad():
-                        outputs = pipeline.model.get_outputs_for_camera_ray_bundle(camera_ray_bundle)
+                        if pipeline.model.moo():
+                            outputs = pipeline.model.get_outputs_for_camera_reshaped(cameras[camera_idx])
+                        else:
+                            outputs = pipeline.model.get_outputs_for_camera_ray_bundle(camera_ray_bundle)
 
                 render_image = []
+                print("RENDERED NAMES", rendered_output_names)
                 for rendered_output_name in rendered_output_names:
                     if rendered_output_name not in outputs:
                         CONSOLE.rule("Error", style="red")

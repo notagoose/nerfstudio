@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Dict, List, Literal, Optional, Tuple, Union
 
+import numpy as np
 import cv2
 import torch
 import torchvision

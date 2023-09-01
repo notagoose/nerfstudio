@@ -83,6 +83,7 @@ class MLP(FieldComponent):
         skip_connections: Optional[Tuple[int]] = None,
         activation: Optional[nn.Module] = nn.ReLU(),
         out_activation: Optional[nn.Module] = None,
+        weight_norm: bool = False,
         implementation: Literal["tcnn", "torch"] = "torch",
     ) -> None:
         super().__init__()
@@ -98,6 +99,10 @@ class MLP(FieldComponent):
         self.net = None
 
         self.tcnn_encoding = None
+        self.weight_norm = weight_norm
+        if weight_norm:
+            assert implementation == "torch"
+        
         if implementation == "torch":
             self.build_nn_modules()
         elif implementation == "tcnn" and not TCNN_EXISTS:
@@ -136,19 +141,24 @@ class MLP(FieldComponent):
 
     def build_nn_modules(self) -> None:
         """Initialize multi-layer perceptron."""
+        lin = lambda x, y : nn.Linear(x, y)
+        if self.weight_norm:
+            lin = lambda x, y : nn.utils.weight_norm(nn.Linear(x, y))
+        
         layers = []
         if self.num_layers == 1:
-            layers.append(nn.Linear(self.in_dim, self.out_dim))
+            layers.append(lin(self.in_dim, self.out_dim))
         else:
             for i in range(self.num_layers - 1):
                 if i == 0:
                     assert i not in self._skip_connections, "Skip connection at layer 0 doesn't make sense."
-                    layers.append(nn.Linear(self.in_dim, self.layer_width))
+                    layers.append(lin(self.in_dim, self.layer_width))
                 elif i in self._skip_connections:
-                    layers.append(nn.Linear(self.layer_width + self.in_dim, self.layer_width))
+                    layers.append(lin(self.layer_width + self.in_dim, self.layer_width))
                 else:
-                    layers.append(nn.Linear(self.layer_width, self.layer_width))
-            layers.append(nn.Linear(self.layer_width, self.out_dim))
+                    layers.append(lin(self.layer_width, self.layer_width))
+
+            layers.append(lin(self.layer_width, self.out_dim))
         self.layers = nn.ModuleList(layers)
 
     def pytorch_fwd(self, in_tensor: Float[Tensor, "*bs in_dim"]) -> Float[Tensor, "*bs out_dim"]:

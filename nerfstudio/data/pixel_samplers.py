@@ -300,3 +300,54 @@ class PatchPixelSampler(PixelSampler):
             indices = indices.flatten(0, 2)
 
         return indices
+
+class FullPixelSampler(PixelSampler):
+    """Samples entire image.
+
+    Args:
+        num_rays_per_batch: number of rays to sample per batch
+        keep_full_image: whether or not to include a reference to the full image in returned batch
+    """
+
+    def __init__(self, num_rays_per_batch: int, keep_full_image: bool = False, **kwargs) -> None:
+        self.image_height = kwargs["image_height"]
+        self.image_width = kwargs["image_width"]
+        num_rays = self.image_height * self.image_width
+        super().__init__(num_rays, keep_full_image, **kwargs)
+
+    def set_num_rays_per_batch(self, num_rays_per_batch: int):
+        """Set the number of rays to sample per batch. Overridden to deal with patch-based sampling.
+
+        Args:
+            num_rays_per_batch: number of rays to sample per batch
+        """
+        self.num_rays_per_batch = self.image_height * self.image_weight
+
+    # overrides base method
+    def sample_method(
+        self,
+        batch_size: int,
+        num_images: int,
+        image_height: int,
+        image_width: int,
+        mask: Optional[Tensor] = None,
+        device: Union[torch.device, str] = "cpu",
+    ) -> Int[Tensor, "batch_size 3"]:
+        assert num_images != 1
+        sub_bs = 1
+        indices = torch.zeros((sub_bs, 3), device=device, dtype=torch.int64)
+        rand_camera = torch.randint(num_images, (sub_bs,))
+        indices[:,0] = rand_camera
+        
+        indices = indices.view(sub_bs, 1, 1, 3).broadcast_to(sub_bs, self.image_height, self.image_width, 3).clone()
+
+        yys, xxs = torch.meshgrid(
+            torch.arange(self.image_height, device=device), torch.arange(self.image_width, device=device)
+        )
+        indices[:, ..., 1] = yys
+        indices[:, ..., 2] = xxs
+
+        indices = torch.floor(indices).long()
+        indices = indices.flatten(0, 2)
+
+        return indices

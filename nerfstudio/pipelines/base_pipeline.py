@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from time import time
 from typing import Any, Dict, List, Literal, Mapping, Optional, Tuple, Type, Union, cast
 
+import matplotlib.pyplot as plt
+
 import torch
 import torch.distributed as dist
 from rich.progress import (
@@ -278,6 +280,15 @@ class VanillaPipeline(Pipeline):
             step: current iteration step to update sampler if using DDP (distributed)
         """
         ray_bundle, batch = self.datamanager.next_train(step)
+        # save_filename = None
+        # print("OK", batch["indices"][0,0].item())
+        # save_filename = str(batch["indices"][0,0].item()) + "_gt"
+        # if save_filename is not None and self.model.moo():
+        #     plt.matshow(batch["image"].reshape(1920, 1440, 3).detach().cpu().numpy())
+        #     # plt.matshow(batch["image"].reshape(1000, 1504, 3).detach().cpu().numpy())
+        #     plt.savefig(f'temp/mesh/{save_filename}.png')
+        #     plt.close(plt.gcf())
+
         model_outputs = self._model(ray_bundle)  # train distributed data parallel model if world_size > 1
         metrics_dict = self.model.get_metrics_dict(model_outputs, batch)
 

@@ -25,7 +25,7 @@ from typing import Literal, Optional, Tuple
 import torch
 import yaml
 
-from nerfstudio.configs.method_configs import all_methods
+from nerfstudio.configs.method_configs_normal import all_methods
 from nerfstudio.data.datamanagers.base_datamanager import VanillaDataManagerConfig
 from nerfstudio.data.dataparsers.blender_dataparser import BlenderDataParserConfig
 from nerfstudio.engine.trainer import TrainerConfig
