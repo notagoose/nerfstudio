@@ -44,6 +44,7 @@ from nerfstudio.utils.rich_utils import CONSOLE, ItersPerSecColumn
 
 import matplotlib as mpl
 
+
 @dataclass
 class Mesh:
     """Class for a mesh."""
@@ -136,7 +137,7 @@ def generate_point_cloud(
             with torch.no_grad():
                 ray_bundle, _ = pipeline.datamanager.next_train(0)
                 outputs = pipeline.model(ray_bundle)
-                outputs["quality"] = ((outputs["rgb"])**2).sum(dim=-1)
+                outputs["quality"] = ((outputs["rgb"]) ** 2).sum(dim=-1)
             if rgb_output_name not in outputs:
                 CONSOLE.rule("Error", style="red")
                 CONSOLE.print(f"Could not find {rgb_output_name} in the model outputs", justify="center")
@@ -163,7 +164,7 @@ def generate_point_cloud(
                 normal = (normal * 2.0) - 1.0
             point = ray_bundle.origins + ray_bundle.directions * depth
             view_direction = ray_bundle.directions
-            
+
             if use_bounding_box:
                 comp_l = torch.tensor(bounding_box_min, device=point.device)
                 comp_m = torch.tensor(bounding_box_max, device=point.device)
@@ -177,10 +178,10 @@ def generate_point_cloud(
                 variance = variance[mask]
                 if normal is not None:
                     normal = normal[mask]
-            
+
             use_variance = False
             if use_variance:
-                mask = variance[:,0] < 1e1
+                mask = variance[:, 0] < 1e1
                 # print("RATIO", mask.sum(), mask.shape, mask.sum() / mask.shape[0])
                 point = point[mask]
                 rgb = rgb[mask]
@@ -238,7 +239,7 @@ def generate_point_cloud(
             # mask out normals for points that were removed with remove_outliers
             normals = normals[ind]
         pcd.normals = o3d.utility.Vector3dVector(normals.double().cpu().numpy())
-    
+
     # re-orient the normals
     if reorient_normals:
         normals = torch.from_numpy(np.array(pcd.normals)).float()

@@ -76,7 +76,7 @@ class Field(nn.Module):
         Args:
             positions: Positions to compute density.
         """
-    
+
     @abstractmethod
     def get_density(
         self, ray_samples: RaySamples

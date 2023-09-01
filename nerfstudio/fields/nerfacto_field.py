@@ -197,7 +197,7 @@ class NerfactoField(Field):
             out_activation=nn.Sigmoid(),
             implementation=implementation,
         )
-    
+
     def get_density_at_points(self, positions: Tensor) -> Tuple[Tensor, Tensor]:
         if self.spatial_distortion is not None:
             positions = self.spatial_distortion(positions)

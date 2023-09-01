@@ -87,7 +87,7 @@ def eval_setup(
         Loaded config, pipeline module, corresponding checkpoint, and step
     """
     # load save config
-  
+
     config = yaml.load(config_path.read_text(), Loader=yaml.Loader)
     assert isinstance(config, TrainerConfig)
 

@@ -1,5 +1,20 @@
+# Copyright 2022 the Regents of the University of California, Nerfstudio Team and contributors. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import time
 import torch
+
 
 class Timer:
     def __init__(self, cuda_support=True):
@@ -10,7 +25,7 @@ class Timer:
         self.laps = 0
         self.key = None
         self.cuda_support = cuda_support
-    
+
     def start(self, key):
         if self.key is not None and self.cuda_support:
             self.start_events[self.key].pop()
@@ -24,7 +39,7 @@ class Timer:
             self.start_events[key].append(torch.cuda.Event(enable_timing=True))
             self.start_events[key][-1].record()
         self.time = time.time()
-    
+
     def stop(self):
         if self.key is None:
             return
@@ -35,10 +50,10 @@ class Timer:
             self.stop_events[self.key].append(torch.cuda.Event(enable_timing=True))
             self.stop_events[self.key][-1].record()
         self.key = None
-    
+
     def lap(self):
         self.laps += 1
-    
+
     def dump_key(self, key):
         time = 1000 * self.times[key]
         accurate_time = 0

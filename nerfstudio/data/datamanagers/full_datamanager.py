@@ -69,6 +69,7 @@ from nerfstudio.utils.misc import IterableWrapper
 from nerfstudio.utils.rich_utils import CONSOLE
 from nerfstudio.data.datamanagers.base_datamanager import DataManagerConfig, DataManager
 
+
 @dataclass
 class FullDataManagerConfig(DataManagerConfig):
     """A basic data manager"""
@@ -104,9 +105,9 @@ class FullDataManagerConfig(DataManagerConfig):
     """
     patch_size: int = 1
     """Size of patch to sample from. If >1, patch-based sampling will be used."""
-    image_height: int = -1,
+    image_height: int = (-1,)
     """Image height. If -1, set according to camera data"""
-    image_width: int = -1,
+    image_width: int = (-1,)
     """Image width. If -1, set according to camera data"""
 
 
@@ -164,7 +165,7 @@ class FullDataManager(DataManager, Generic[TDataset]):
         self.train_dataset = self.create_train_dataset()
         self.eval_dataset = self.create_eval_dataset()
         self.exclude_batch_keys_from_device = self.train_dataset.exclude_batch_keys_from_device
-         
+
         if self.train_dataparser_outputs is not None:
             cameras = self.train_dataparser_outputs.cameras
             self.cameras = cameras

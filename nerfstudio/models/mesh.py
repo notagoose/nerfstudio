@@ -1,3 +1,17 @@
+# Copyright 2022 the Regents of the University of California, Nerfstudio Team and contributors. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -45,6 +59,7 @@ from nerfstudio.fields.mesh_field import MeshField, SingleCamera
 
 import open3d as o3d
 
+
 @dataclass
 class MeshModelConfig(ModelConfig):
     """Mesh Model Config"""
@@ -68,13 +83,13 @@ class MeshModelConfig(ModelConfig):
     """Whether or not to learn vertex offsets"""
     weight_norm: bool = False
     """Whether to use weight normalization in MLPs"""
-    geo_feat_dim: int=256
-    hash_encoding: bool=True
+    geo_feat_dim: int = 256
+    hash_encoding: bool = True
     save_dir: str = ""
     """Save directory"""
 
-class MeshModel(Model):
 
+class MeshModel(Model):
     config: MeshModelConfig
 
     def populate_modules(self):
@@ -108,11 +123,11 @@ class MeshModel(Model):
     ) -> List[TrainingCallback]:
         callbacks = []
         return callbacks
-    
+
     def get_outputs_for_camera(self, camera: Cameras):
         outputs = self.field.get_camera_outputs(SingleCamera(camera, -1), False, "viewer")
         return outputs
-    
+
     def get_outputs_for_camera_reshaped(self, camera: Cameras):
         outputs = self.field.get_camera_outputs(SingleCamera(camera, -1), False, "viewer")
         image_height, image_width = outputs["dim"]
@@ -124,11 +139,11 @@ class MeshModel(Model):
         return image_outputs
 
     def get_outputs(self, ray_bundle: RayBundle):
-        idx = ray_bundle.camera_indices[0,0].item()
+        idx = ray_bundle.camera_indices[0, 0].item()
         # outputs = self.field.get_camera_outputs(SingleCamera(self.cameras[idx], idx), False, str(idx))
         outputs = self.field.get_bundle_outputs(ray_bundle, SingleCamera(self.cameras[idx], idx), False)
         return outputs
-    
+
     def get_metrics_dict(self, outputs, batch):
         metrics_dict = {}
         image = batch["image"].to(self.device)
@@ -138,10 +153,10 @@ class MeshModel(Model):
     def get_loss_dict(self, outputs, batch, metrics_dict=None):
         loss_dict = {}
         image = batch["image"].to(self.device)
-        loss_dict["rgb_loss"] = self.config.rgb_loss_mult * self.rgb_loss(image, outputs["rgb"]) # 1e0
+        loss_dict["rgb_loss"] = self.config.rgb_loss_mult * self.rgb_loss(image, outputs["rgb"])  # 1e0
         if self.training:
-            loss_dict["vertex_offset_loss"] = self.config.vertex_loss_mult * self.field.vertex_offset_loss() # 1e-1
-            loss_dict["laplacian_loss"] = self.config.lap_loss_mult * self.field.laplacian_smooth_loss() # 1e2
+            loss_dict["vertex_offset_loss"] = self.config.vertex_loss_mult * self.field.vertex_offset_loss()  # 1e-1
+            loss_dict["laplacian_loss"] = self.config.lap_loss_mult * self.field.laplacian_smooth_loss()  # 1e2
             # loss_dict["rgb_variation_loss"] = 0.01 * self.field.rgb_variation_loss()
         print("LOSS", loss_dict)
         return loss_dict
@@ -150,7 +165,7 @@ class MeshModel(Model):
         self, outputs: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor]
     ) -> Tuple[Dict[str, float], Dict[str, torch.Tensor]]:
         pass
-    
+
     def get_param_groups(self) -> Dict[str, List[Parameter]]:
         param_groups = {}
         # param_groups["fields"] = list(self.field.parameters())
@@ -159,9 +174,9 @@ class MeshModel(Model):
         if self.config.learn_vertices:
             param_groups["vertex_offsets"] = [self.field.vertex_offsets]
         return param_groups
-    
+
     def save_mesh(self, path: Path):
         self.field.save_mesh(path)
-    
+
     def moo(self) -> bool:
         return True

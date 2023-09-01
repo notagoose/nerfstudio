@@ -279,7 +279,7 @@ class DepthRenderer(nn.Module):
             if ray_indices is not None and num_rays is not None:
                 raise NotImplementedError("Median depth calculation is not implemented for packed samples.")
             mean = torch.sum(weights * steps, dim=-2) / (torch.sum(weights, -2) + eps)
-            var = torch.sum(weights * (steps - mean[:,None,:])**2, dim=-2) / (torch.sum(weights, -2) + eps)
+            var = torch.sum(weights * (steps - mean[:, None, :]) ** 2, dim=-2) / (torch.sum(weights, -2) + eps)
             cumulative_weights = torch.cumsum(weights[..., 0], dim=-1)  # [..., num_samples]
             split = torch.ones((*weights.shape[:-2], 1), device=weights.device) * 0.5  # [..., 1]
             median_index = torch.searchsorted(cumulative_weights, split, side="left")  # [..., 1]
@@ -328,8 +328,7 @@ class DepthRenderer(nn.Module):
 
 
 class QualityRenderer(nn.Module):
-    """Calculate depth quality along ray.
-    """
+    """Calculate depth quality along ray."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -355,7 +354,7 @@ class QualityRenderer(nn.Module):
         eps = 1e-10
         steps = (ray_samples.frustums.starts + ray_samples.frustums.ends) / 2
         mean = torch.sum(weights * steps, dim=-2) / (torch.sum(weights, -2) + eps)
-        var = torch.sum(weights * (steps - mean[:,None,:])**2, dim=-2) / (torch.sum(weights, -2) + eps)
+        var = torch.sum(weights * (steps - mean[:, None, :]) ** 2, dim=-2) / (torch.sum(weights, -2) + eps)
         make_plots = False
         if make_plots:
             indices = list(range(var.shape[0]))
@@ -364,11 +363,11 @@ class QualityRenderer(nn.Module):
             depth_range = [0.7, 3.3]
             count = 0
             for i in indices:
-                xs = steps[i,:,0].cpu().numpy()
-                ys = weights[i,:,0].cpu().numpy()
+                xs = steps[i, :, 0].cpu().numpy()
+                ys = weights[i, :, 0].cpu().numpy()
                 eps = 1e-10
                 mean = np.sum(xs * ys) / (np.sum(ys) + eps)
-                median = xs[np.searchsorted(np.cumsum(ys), 0.5, side="left").clip(0, xs.shape[0]-1)]
+                median = xs[np.searchsorted(np.cumsum(ys), 0.5, side="left").clip(0, xs.shape[0] - 1)]
                 mode = xs[np.argmax(ys)]
                 # if mean < depth_range[0] or mean > depth_range[1]:
                 #     continue

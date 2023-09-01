@@ -36,6 +36,7 @@ from nerfstudio.field_components.spatial_distortions import SceneContraction
 from nerfstudio.fields.nero_field import NeROFieldConfig, NeROField
 from nerfstudio.utils.custom_eval_utils import eval_setup
 
+
 @dataclass
 class NeROModelConfig(SurfaceModelConfig):
     """NeRO Model Config"""

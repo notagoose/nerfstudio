@@ -102,7 +102,7 @@ class MLP(FieldComponent):
         self.weight_norm = weight_norm
         if weight_norm:
             assert implementation == "torch"
-        
+
         if implementation == "torch":
             self.build_nn_modules()
         elif implementation == "tcnn" and not TCNN_EXISTS:
@@ -141,10 +141,10 @@ class MLP(FieldComponent):
 
     def build_nn_modules(self) -> None:
         """Initialize multi-layer perceptron."""
-        lin = lambda x, y : nn.Linear(x, y)
+        lin = lambda x, y: nn.Linear(x, y)
         if self.weight_norm:
-            lin = lambda x, y : nn.utils.weight_norm(nn.Linear(x, y))
-        
+            lin = lambda x, y: nn.utils.weight_norm(nn.Linear(x, y))
+
         layers = []
         if self.num_layers == 1:
             layers.append(lin(self.in_dim, self.out_dim))

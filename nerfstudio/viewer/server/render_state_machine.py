@@ -218,7 +218,7 @@ class RenderStateMachine(threading.Thread):
 
         selected_output = colormaps.apply_colormap(
             # image=outputs[self.viewer.control_panel.output_render],
-            image = selected_image,
+            image=selected_image,
             colormap_options=self.viewer.control_panel.colormap_options,
         )
 

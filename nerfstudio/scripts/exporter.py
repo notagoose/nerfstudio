@@ -119,7 +119,7 @@ class ExportPointCloud(Exporter):
     """Minimum of the bounding box, used if use_bounding_box is True."""
     bounding_box_max: Tuple[float, float, float] = (1, 1, 1)
     """Maximum of the bounding box, used if use_bounding_box is True."""
-    num_rays_per_batch: int = 4096 # 32768
+    num_rays_per_batch: int = 4096  # 32768
     """Number of rays to evaluate per batch. Decrease if you run out of memory."""
     std_ratio: float = 10.0
     """Threshold based on STD of the average distances across the point cloud to remove outliers."""
@@ -243,6 +243,7 @@ class ExportTSDFMesh(Exporter):
                 num_pixels_per_side=self.num_pixels_per_side,
             )
 
+
 @dataclass
 class ExportNKSRMesh(Exporter):
     """
@@ -269,7 +270,7 @@ class ExportNKSRMesh(Exporter):
     """Minimum of the bounding box, used if use_bounding_box is True."""
     bounding_box_max: Tuple[float, float, float] = (1, 1, 1)
     """Minimum of the bounding box, used if use_bounding_box is True."""
-    num_rays_per_batch: int = 256 # 32768
+    num_rays_per_batch: int = 256  # 32768
     """Number of rays to evaluate per batch. Decrease if you run out of memory."""
     texture_method: Literal["point_cloud", "nerf"] = "nerf"
     """Method to texture the mesh with. Either 'point_cloud' or 'nerf'."""
@@ -331,7 +332,7 @@ class ExportNKSRMesh(Exporter):
 
         CONSOLE.print("Computing Mesh... this may take a while.")
         start_time = time.time()
-        device = torch.device('cuda')
+        device = torch.device("cuda")
         input_xyz = torch.Tensor(pcd.points).to(device)
         input_normal = torch.Tensor(pcd.normals).to(device)
         reconstructor = nksr.Reconstructor(device)
@@ -348,16 +349,16 @@ class ExportNKSRMesh(Exporter):
         CONSOLE.print("Mesh size:", mesh.v.shape, mesh.f.shape)
 
         vertices = mesh.v.cpu().numpy()
-        knn = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(pcd.points))
+        knn = NearestNeighbors(n_neighbors=1, algorithm="ball_tree").fit(np.array(pcd.points))
         _, indices = knn.kneighbors(vertices)
-        rgbs = np.array(pcd.colors)[indices,:]
-        rgbs = rgbs[:,0,:]
+        rgbs = np.array(pcd.colors)[indices, :]
+        rgbs = rgbs[:, 0, :]
 
         vertices = o3d.utility.Vector3dVector(vertices)
         faces = o3d.utility.Vector3iVector(mesh.f.cpu().numpy())
         mesh = o3d.geometry.TriangleMesh(vertices, faces)
         mesh.vertex_colors = o3d.utility.Vector3dVector(rgbs)
-        
+
         o3d.io.write_triangle_mesh(str(self.output_dir / "nksr_mesh.ply"), mesh)
         print("\033[A\033[A")
         CONSOLE.print("[bold green]:white_check_mark: Saving Mesh")
@@ -378,6 +379,7 @@ class ExportNKSRMesh(Exporter):
                 unwrap_method=self.unwrap_method,
                 num_pixels_per_side=self.num_pixels_per_side,
             )
+
 
 @dataclass
 class ExportPoissonMesh(Exporter):
@@ -405,7 +407,7 @@ class ExportPoissonMesh(Exporter):
     """Minimum of the bounding box, used if use_bounding_box is True."""
     bounding_box_max: Tuple[float, float, float] = (1, 1, 1)
     """Minimum of the bounding box, used if use_bounding_box is True."""
-    num_rays_per_batch: int = 16 # 32768
+    num_rays_per_batch: int = 16  # 32768
     """Number of rays to evaluate per batch. Decrease if you run out of memory."""
     texture_method: Literal["point_cloud", "nerf"] = "nerf"
     """Method to texture the mesh with. Either 'point_cloud' or 'nerf'."""
@@ -452,7 +454,7 @@ class ExportPoissonMesh(Exporter):
             bounding_box_min=self.bounding_box_min,
             bounding_box_max=self.bounding_box_max,
             std_ratio=self.std_ratio,
-            reorient_normals = self.reorient_normals,
+            reorient_normals=self.reorient_normals,
         )
         torch.cuda.empty_cache()
         CONSOLE.print(f"[bold green]:white_check_mark: Generated {pcd}")
@@ -464,17 +466,17 @@ class ExportPoissonMesh(Exporter):
             CONSOLE.print("[bold green]:white_check_mark: Saving Point Cloud")
 
         CONSOLE.print("Computing Mesh... this may take a while.")
-        mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd, depth=12) #depth=9)
+        mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd, depth=12)  # depth=9)
         # vertices_to_remove = densities < np.quantile(densities, 0.1)
         # mesh.remove_vertices_by_mask(vertices_to_remove)
         print("\033[A\033[A")
         CONSOLE.print("[bold green]:white_check_mark: Computing Mesh")
 
         vertices = np.array(mesh.vertices)
-        knn = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(np.array(pcd.points))
+        knn = NearestNeighbors(n_neighbors=1, algorithm="ball_tree").fit(np.array(pcd.points))
         _, indices = knn.kneighbors(vertices)
-        rgbs = np.array(pcd.colors)[indices,:]
-        rgbs = rgbs[:,0,:]
+        rgbs = np.array(pcd.colors)[indices, :]
+        rgbs = rgbs[:, 0, :]
 
         mesh.vertex_colors = o3d.utility.Vector3dVector(rgbs)
 
@@ -499,6 +501,7 @@ class ExportPoissonMesh(Exporter):
                 unwrap_method=self.unwrap_method,
                 num_pixels_per_side=self.num_pixels_per_side,
             )
+
 
 @dataclass
 class ExportDualContouring(Exporter):
@@ -527,7 +530,7 @@ class ExportDualContouring(Exporter):
     """Minimum of the bounding box, used if use_bounding_box is True."""
     bounding_box_max: Tuple[float, float, float] = (1, 1, 1)
     """Maximum of the bounding box, used if use_bounding_box is True."""
-    num_rays_per_batch: int = 4096 # 32768
+    num_rays_per_batch: int = 4096  # 32768
     """Number of rays to evaluate per batch. Decrease if you run out of memory."""
     std_ratio: float = 10.0
     """Threshold based on STD of the average distances across the point cloud to remove outliers."""
@@ -570,20 +573,19 @@ class ExportDualContouring(Exporter):
         print("\033[A\033[A")
         CONSOLE.print("[bold green]:white_check_mark: Saving Point Cloud")
 
-
         bounding_box_min = torch.cuda.FloatTensor(self.bounding_box_min)
         bounding_box_max = torch.cuda.FloatTensor(self.bounding_box_max)
 
         for param in pipeline.model.field.parameters():
             param.requires_grad_(False)
-        
+
         points = torch.from_numpy(np.array(pcd.points)).cuda()
         self.isosurface_threshold = 0.0
 
         density = False
-        field = lambda x : cast(SDFField, pipeline.model.field).forward_geonetwork(x)[:,0].contiguous()
+        field = lambda x: cast(SDFField, pipeline.model.field).forward_geonetwork(x)[:, 0].contiguous()
         if density:
-            field = lambda x : pipeline.model.field.get_density_at_points(x)[0][:,0].contiguous()
+            field = lambda x: pipeline.model.field.get_density_at_points(x)[0][:, 0].contiguous()
             check_vals = field(points)
             self.isosurface_threshold = torch.mean(check_vals).item()
         print("ISOSURFACE THRESHOLD", self.isosurface_threshold)
@@ -591,14 +593,14 @@ class ExportDualContouring(Exporter):
         def implicit_fn(x):
             # with torch.no_grad():
             if len(x.shape) == 1:
-                x = x[None,:]
+                x = x[None, :]
             val = field(x) - self.isosurface_threshold
             return val
-        
+
         def normal_fn(x):
             x = x.clone()
             if len(x.shape) == 1:
-                x = x[None,:]
+                x = x[None, :]
             analytic = False
             if analytic:
                 x.requires_grad_(True)
@@ -606,34 +608,39 @@ class ExportDualContouring(Exporter):
                     output = implicit_fn(x)
                 d_output = torch.ones_like(output, requires_grad=False)
                 gradients = torch.autograd.grad(
-                    outputs=output, inputs=x, grad_outputs=d_output, create_graph=False, retain_graph=False, only_inputs=True
+                    outputs=output,
+                    inputs=x,
+                    grad_outputs=d_output,
+                    create_graph=False,
+                    retain_graph=False,
+                    only_inputs=True,
                 )[0]
             else:
                 gradients = torch.zeros_like(x)
                 eps = 1e-6
                 for i in range(3):
                     eps_vector = torch.zeros_like(x)
-                    eps_vector[...,i] = eps
-                    gradients[...,i] = (implicit_fn(x+eps_vector) - implicit_fn(x-eps_vector)) / (2 * eps)
-            normal = gradients / torch.clamp(torch.linalg.norm(gradients, dim=-1)[...,None], min=1e-20)
+                    eps_vector[..., i] = eps
+                    gradients[..., i] = (implicit_fn(x + eps_vector) - implicit_fn(x - eps_vector)) / (2 * eps)
+            normal = gradients / torch.clamp(torch.linalg.norm(gradients, dim=-1)[..., None], min=1e-20)
             x = x.detach()
             print("NORMALS", normal)
             print("GRADIENTS", gradients)
             if not torch.isfinite(normal).all():
                 mask = ~torch.isfinite(normal).all(dim=-1)
                 print("NOT FINITE")
-                print(normal[mask,:], normal.dtype)
-                print(gradients[mask,:], gradients.dtype)
-                print(x[mask,:], x.dtype)
-                normal[mask,:] = 0
-                normal[mask,0] = 1
+                print(normal[mask, :], normal.dtype)
+                print(gradients[mask, :], gradients.dtype)
+                print(x[mask, :], x.dtype)
+                normal[mask, :] = 0
+                normal[mask, 0] = 1
             return normal.detach()
 
         filename = self.output_dir / "dual_contouring.ply"
         # points = None
         CONSOLE.print("Extracting mesh with dual contouring... which may take a while")
         aabb = torch.stack([torch.Tensor(self.bounding_box_min), torch.Tensor(self.bounding_box_max)])
-        mesh = dual_contour(implicit_fn, normal_fn, points, aabb, 4, 6) #6, 10)
+        mesh = dual_contour(implicit_fn, normal_fn, points, aabb, 4, 6)  # 6, 10)
         o3d.io.write_triangle_mesh(str(filename), mesh)
 
 
@@ -664,7 +671,7 @@ class ExportEnvelopedPointCloud(Exporter):
     """Minimum of the bounding box, used if use_bounding_box is True."""
     bounding_box_max: Tuple[float, float, float] = (1, 1, 1)
     """Maximum of the bounding box, used if use_bounding_box is True."""
-    num_rays_per_batch: int = 4096 # 32768
+    num_rays_per_batch: int = 4096  # 32768
     """Number of rays to evaluate per batch. Decrease if you run out of memory."""
     std_ratio: float = 10.0
     """Threshold based on STD of the average distances across the point cloud to remove outliers."""
@@ -692,11 +699,10 @@ class ExportEnvelopedPointCloud(Exporter):
         def implicit_fn(x):
             lower_bounds = 0.99 * bounding_box_min + 0.01 * bounding_box_max
             upper_bounds = 0.01 * bounding_box_min + 0.99 * bounding_box_max
-            
-            val = pipeline.model.field.get_density_at_points(x)[0][:,0].contiguous()
+
+            val = pipeline.model.field.get_density_at_points(x)[0][:, 0].contiguous()
             mask = torch.logical_or(
-                torch.any(x > upper_bounds[None,:], dim=-1),
-                torch.any(x < lower_bounds[None,:], dim=-1)
+                torch.any(x > upper_bounds[None, :], dim=-1), torch.any(x < lower_bounds[None, :], dim=-1)
             )
             val[mask] = 1
             return val
@@ -785,14 +791,15 @@ class ExportMarchingCubesMesh(Exporter):
         to evaluate the SDF where the minimum resolution is 512."""
 
         density = False
-        field = lambda x : cast(SDFField, pipeline.model.field).forward_geonetwork(x)[:,0].contiguous()
+        field = lambda x: cast(SDFField, pipeline.model.field).forward_geonetwork(x)[:, 0].contiguous()
         if density:
-            field = lambda x : pipeline.model.field.get_density_at_points(x)[0][:,0].contiguous() - 200
-        
+            field = lambda x: pipeline.model.field.get_density_at_points(x)[0][:, 0].contiguous() - 200
+
         def cube_function(xyz):
             if len(xyz.shape) == 1:
-                xyz = xyz[None,:]
+                xyz = xyz[None, :]
             return torch.max(torch.abs(xyz), dim=-1).values - 2.8
+
         field = cube_function
         # Extract mesh using marching cubes for sdf at a multi-scale resolution.
         multi_res_mesh = generate_mesh_with_multires_marching_cubes(

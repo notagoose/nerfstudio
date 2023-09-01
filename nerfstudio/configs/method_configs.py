@@ -84,7 +84,7 @@ descriptions = {
     "neus": "Implementation of NeuS. (slow)",
     "neus-facto": "Implementation of NeuS-Facto. (slow)",
     "nero": "Implementation of NeRO. (slow)",
-    "mesh": "Post-extraction mesh optimization (fast)"
+    "mesh": "Post-extraction mesh optimization (fast)",
 }
 
 method_configs["nerfacto"] = TrainerConfig(
@@ -658,14 +658,14 @@ method_configs["nero"] = TrainerConfig(
     vis="viewer",
 )
 
-GRADIENT_ACCUMULATION_STEPS = 5 #10
+GRADIENT_ACCUMULATION_STEPS = 5  # 10
 
 method_configs["mesh"] = TrainerConfig(
     method_name="mesh",
-    steps_per_eval_batch=500//GRADIENT_ACCUMULATION_STEPS,
-    steps_per_save=1000//GRADIENT_ACCUMULATION_STEPS,
+    steps_per_eval_batch=500 // GRADIENT_ACCUMULATION_STEPS,
+    steps_per_save=1000 // GRADIENT_ACCUMULATION_STEPS,
     gradient_accumulation_steps=GRADIENT_ACCUMULATION_STEPS,
-    max_num_iterations=30000//GRADIENT_ACCUMULATION_STEPS,
+    max_num_iterations=30000 // GRADIENT_ACCUMULATION_STEPS,
     mixed_precision=True,
     pipeline=VanillaPipelineConfig(
         datamanager=FullDataManagerConfig(
@@ -675,7 +675,9 @@ method_configs["mesh"] = TrainerConfig(
             camera_optimizer=CameraOptimizerConfig(
                 mode="SO3xR3",
                 optimizer=AdamOptimizerConfig(lr=6e-4, eps=1e-8, weight_decay=1e-2),
-                scheduler=ExponentialDecaySchedulerConfig(lr_final=6e-6, max_steps=200000//GRADIENT_ACCUMULATION_STEPS),
+                scheduler=ExponentialDecaySchedulerConfig(
+                    lr_final=6e-6, max_steps=200000 // GRADIENT_ACCUMULATION_STEPS
+                ),
             ),
         ),
         model=MeshModelConfig(eval_num_rays_per_chunk=1 << 15),
@@ -685,21 +687,22 @@ method_configs["mesh"] = TrainerConfig(
             "optimizer": AdamOptimizerConfig(lr=0e-2, eps=1e-15, weight_decay=0),
             "scheduler": ExponentialDecaySchedulerConfig(
                 lr_final=4e-5,
-                max_steps=200000//GRADIENT_ACCUMULATION_STEPS,
+                max_steps=200000 // GRADIENT_ACCUMULATION_STEPS,
             ),
         },
         "vertex_offsets": {
             "optimizer": AdamOptimizerConfig(lr=0e-2, eps=1e-15, weight_decay=0),
             "scheduler": ExponentialDecaySchedulerConfig(
                 lr_final=4e-5,
-                max_steps=200000//GRADIENT_ACCUMULATION_STEPS,
-                warmup_steps=50000//GRADIENT_ACCUMULATION_STEPS,
+                max_steps=200000 // GRADIENT_ACCUMULATION_STEPS,
+                warmup_steps=50000 // GRADIENT_ACCUMULATION_STEPS,
             ),
         },
     },
     viewer=ViewerConfig(num_rays_per_chunk=1 << 15),
     vis="viewer",
 )
+
 
 def merge_methods(methods, method_descriptions, new_methods, new_descriptions, overwrite=True):
     """Merge new methods and descriptions into existing methods and descriptions.

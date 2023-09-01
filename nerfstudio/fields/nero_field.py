@@ -50,12 +50,15 @@ except ModuleNotFoundError:
     # tinycudann module doesn't exist
     pass
 
+
 def find_nan(t):
     return
     # assert not torch.isnan(t).any()
 
+
 def safe_normalize(x, eps=1e-20):
     return x / torch.sqrt(torch.clamp(torch.sum(x * x, -1, keepdim=True), min=eps))
+
 
 # Positional encoding embedding. Code was taken from https://github.com/bmild/nerf.
 class Embedder:
@@ -65,22 +68,22 @@ class Embedder:
 
     def create_embedding_fn(self):
         embed_fns = []
-        d = self.kwargs['input_dims']
+        d = self.kwargs["input_dims"]
         out_dim = 0
-        if self.kwargs['include_input']:
+        if self.kwargs["include_input"]:
             embed_fns.append(lambda x: x)
             out_dim += d
 
-        max_freq = self.kwargs['max_freq_log2']
-        N_freqs = self.kwargs['num_freqs']
+        max_freq = self.kwargs["max_freq_log2"]
+        N_freqs = self.kwargs["num_freqs"]
 
-        if self.kwargs['log_sampling']:
-            freq_bands = 2. ** torch.linspace(0., max_freq, N_freqs)
+        if self.kwargs["log_sampling"]:
+            freq_bands = 2.0 ** torch.linspace(0.0, max_freq, N_freqs)
         else:
-            freq_bands = torch.linspace(2.**0., 2.**max_freq, N_freqs)
+            freq_bands = torch.linspace(2.0**0.0, 2.0**max_freq, N_freqs)
 
         for freq in freq_bands:
-            for p_fn in self.kwargs['periodic_fns']:
+            for p_fn in self.kwargs["periodic_fns"]:
                 embed_fns.append(lambda x, p_fn=p_fn, freq=freq: p_fn(x * freq))
                 out_dim += d
 
@@ -90,29 +93,36 @@ class Embedder:
     def embed(self, inputs):
         return torch.cat([fn(inputs) for fn in self.embed_fns], -1)
 
+
 def get_embedder(multires, input_dims=3):
     embed_kwargs = {
-        'include_input': True,
-        'input_dims': input_dims,
-        'max_freq_log2': multires-1,
-        'num_freqs': multires,
-        'log_sampling': True,
-        'periodic_fns': [torch.sin, torch.cos],
+        "include_input": True,
+        "input_dims": input_dims,
+        "max_freq_log2": multires - 1,
+        "num_freqs": multires,
+        "log_sampling": True,
+        "periodic_fns": [torch.sin, torch.cos],
     }
 
     embedder_obj = Embedder(**embed_kwargs)
-    def embed(x, eo=embedder_obj): return eo.embed(x)
+
+    def embed(x, eo=embedder_obj):
+        return eo.embed(x)
+
     return embed, embedder_obj.out_dim
 
-    def forward(self, x): return x
+    def forward(self, x):
+        return x
+
 
 class ExpActivation(nn.Module):
     def __init__(self, max_light=5.0):
         super().__init__()
-        self.max_light=max_light
+        self.max_light = max_light
 
     def forward(self, x):
         return torch.exp(torch.clamp(x, max=self.max_light))
+
 
 class BiasLayer(nn.Module):
     def __init__(self, bias=0):
@@ -124,20 +134,22 @@ class BiasLayer(nn.Module):
 
 
 class SDFNetwork(nn.Module):
-    def __init__(self,
-                 d_in,
-                 d_out,
-                 d_hidden,
-                 n_layers,
-                 skip_in=(4,),
-                 multires=0,
-                 bias=0.5,
-                 scale=1,
-                 geometric_init=False,
-                 weight_norm=True,
-                 inside_outside=False,
-                 sdf_activation='none',
-                 layer_activation='softplus'):
+    def __init__(
+        self,
+        d_in,
+        d_out,
+        d_hidden,
+        n_layers,
+        skip_in=(4,),
+        multires=0,
+        bias=0.5,
+        scale=1,
+        geometric_init=False,
+        weight_norm=True,
+        inside_outside=False,
+        sdf_activation="none",
+        layer_activation="softplus",
+    ):
         super(SDFNetwork, self).__init__()
 
         dims = [d_in] + [d_hidden for _ in range(n_layers)] + [d_out]
@@ -176,7 +188,7 @@ class SDFNetwork(nn.Module):
                 elif multires > 0 and l in self.skip_in:
                     torch.nn.init.constant_(lin.bias, 0.0)
                     torch.nn.init.normal_(lin.weight, 0.0, np.sqrt(2) / np.sqrt(out_dim))
-                    torch.nn.init.constant_(lin.weight[:, -(dims[0] - 3):], 0.0)
+                    torch.nn.init.constant_(lin.weight[:, -(dims[0] - 3) :], 0.0)
                 else:
                     torch.nn.init.constant_(lin.bias, 0.0)
                     torch.nn.init.normal_(lin.weight, 0.0, np.sqrt(2) / np.sqrt(out_dim))
@@ -186,9 +198,9 @@ class SDFNetwork(nn.Module):
 
             setattr(self, "lin" + str(l), lin)
 
-        if layer_activation=='softplus':
+        if layer_activation == "softplus":
             self.activation = nn.Softplus(beta=100)
-        elif layer_activation=='relu':
+        elif layer_activation == "relu":
             self.activation = nn.ReLU()
         else:
             raise NotImplementedError
@@ -225,12 +237,8 @@ class SDFNetwork(nn.Module):
             y = self.sdf(x)
         d_output = torch.ones_like(y, requires_grad=False, device=y.device)
         gradients = torch.autograd.grad(
-            outputs=y,
-            inputs=x,
-            grad_outputs=d_output,
-            create_graph=True,
-            retain_graph=True,
-            only_inputs=True)[0]
+            outputs=y, inputs=x, grad_outputs=d_output, create_graph=True, retain_graph=True, only_inputs=True
+        )[0]
         return gradients
 
     def sdf_normal(self, x):
@@ -239,13 +247,9 @@ class SDFNetwork(nn.Module):
             y = self.sdf(x)
         d_output = torch.ones_like(y, requires_grad=False, device=y.device)
         gradients = torch.autograd.grad(
-            outputs=y,
-            inputs=x,
-            grad_outputs=d_output,
-            create_graph=True,
-            retain_graph=True,
-            only_inputs=True)[0]
-        return y[...,:1].detach(), gradients.detach()
+            outputs=y, inputs=x, grad_outputs=d_output, create_graph=True, retain_graph=True, only_inputs=True
+        )[0]
+        return y[..., :1].detach(), gradients.detach()
 
 
 @dataclass
@@ -282,13 +286,13 @@ class NeROFieldConfig(FieldConfig):
     beta_init: float = 0.1
     """Init learnable beta value for transformation of sdf to density"""
     encoding_type: Literal["hash", "periodic", "tensorf_vm"] = "hash"
-    num_levels = 3 #16
+    num_levels = 3  # 16
     """Number of encoding levels"""
-    max_res = 2048 # 2048
+    max_res = 2048  # 2048
     """Maximum resolution of the encoding"""
-    base_res = 5 #16
+    base_res = 5  # 16
     """Base resolution of the encoding"""
-    log2_hashmap_size = 8# 19
+    log2_hashmap_size = 8  # 19
     """Size of the hash map"""
     features_per_level = 1
     """Number of features per encoding level"""
@@ -422,12 +426,19 @@ class NeROField(Field):
             #     weight_norm=self.use_weight_norm,
             #     implementation=implementation,
             # )
-            self.mlp_base = SDFNetwork(d_out=1+self.geo_feat_dim, d_in=3, d_hidden=128,
-                                n_layers=8,
-                                skip_in=[4], multires=6,
-                                bias=0.5, scale=1.0,
-                                geometric_init=False,
-                                weight_norm=True, sdf_activation='none')
+            self.mlp_base = SDFNetwork(
+                d_out=1 + self.geo_feat_dim,
+                d_in=3,
+                d_hidden=128,
+                n_layers=8,
+                skip_in=[4],
+                multires=6,
+                bias=0.5,
+                scale=1.0,
+                geometric_init=False,
+                weight_norm=True,
+                sdf_activation="none",
+            )
         # transients
         if self.use_transient_embedding:
             self.transient_embedding_dim = transient_embedding_dim
@@ -517,8 +528,10 @@ class NeROField(Field):
             implementation=implementation,
         )
 
-        FG_LUT = torch.from_numpy(np.fromfile('../NeRO/assets/bsdf_256_256.bin', dtype=np.float32).reshape(1, 256, 256, 2))
-        self.register_buffer('FG_LUT', FG_LUT)
+        FG_LUT = torch.from_numpy(
+            np.fromfile("../NeRO/assets/bsdf_256_256.bin", dtype=np.float32).reshape(1, 256, 256, 2)
+        )
+        self.register_buffer("FG_LUT", FG_LUT)
 
         self.sph_enc = generate_ide_fn(5)
         self.dir_enc, dir_dim = get_embedder(6, 3)
@@ -538,7 +551,7 @@ class NeROField(Field):
                 implementation=implementation,
             ),
             BiasLayer(np.log(0.5)),
-            ExpActivation(max_light=exp_max)
+            ExpActivation(max_light=exp_max),
         )
 
         self.inner_light = nn.Sequential(
@@ -553,7 +566,7 @@ class NeROField(Field):
                 implementation=implementation,
             ),
             BiasLayer(np.log(0.5)),
-            ExpActivation(max_light=exp_max)
+            ExpActivation(max_light=exp_max),
         )
 
         self.inner_weight = nn.Sequential(
@@ -567,7 +580,7 @@ class NeROField(Field):
                 weight_norm=self.use_weight_norm,
                 implementation=implementation,
             ),
-            BiasLayer(-0.95)
+            BiasLayer(-0.95),
         )
         # outer lights are direct lights
         # dim_num = 72
@@ -588,7 +601,7 @@ class NeROField(Field):
 
         if initial_model is not None:
             self.init_from(initial_model)
-    
+
     def init_from(self, initial_model):
         self.mlp_base_grid = initial_model.mlp_base_grid
         self.mlp_base_mlp = initial_model.mlp_base_mlp
@@ -619,7 +632,7 @@ class NeROField(Field):
     def set_cos_anneal_ratio(self, anneal: float) -> None:
         """Set the anneal value for the variance."""
         self._cos_anneal_ratio = anneal
-    
+
     def get_alpha(
         self,
         ray_samples: RaySamples,
@@ -701,7 +714,7 @@ class NeROField(Field):
         """Computes and returns the densities."""
         positions = ray_samples.frustums.get_positions()
         return self.get_density_at_points(positions)
-    
+
     def get_sdf(self, ray_samples: RaySamples) -> Float[Tensor, "num_samples ... 1"]:
         """predict the sdf value for ray samples"""
         positions = ray_samples.frustums.get_start_positions()
@@ -715,7 +728,7 @@ class NeROField(Field):
         ref_roughness = self.sph_enc(reflective, roughness, self.timer)
         self.timer.stop()
         self.timer.start("SPE-A2")
-        pts = self.pos_enc(2*points-1)
+        pts = self.pos_enc(2 * points - 1)
         self.timer.stop()
         # if self.sphere_direction:
         #     sph_points = offset_points_to_sphere(points)
@@ -744,7 +757,7 @@ class NeROField(Field):
 
     def predict_diffuse_lights(self, points, feature_vectors, normals):
         self.timer.start("DIF-A1")
-        roughness = torch.ones([normals.shape[0],1], device=normals.device)
+        roughness = torch.ones([normals.shape[0], 1], device=normals.device)
         ref = self.sph_enc(normals, roughness, self.timer)
         self.timer.stop()
 
@@ -823,19 +836,23 @@ class NeROField(Field):
         specular_albedo = 0.04 * (1 - metallic) + metallic * albedo
         self.timer.stop()
         self.timer.start("CLR-C2")
-        specular_light, occ_prob, indirect_light = self.predict_specular_lights(points, feature_vectors, reflective, roughness)
+        specular_light, occ_prob, indirect_light = self.predict_specular_lights(
+            points, feature_vectors, reflective, roughness
+        )
         self.timer.stop()
 
         self.timer.start("CLR-D1")
-        fg_uv = torch.cat([torch.clamp(NoV, min=0.0, max=1.0), torch.clamp(roughness,min=0.0,max=1.0)],-1)
+        fg_uv = torch.cat([torch.clamp(NoV, min=0.0, max=1.0), torch.clamp(roughness, min=0.0, max=1.0)], -1)
         pn, bn = points.shape[0], 1
         self.timer.stop()
         self.timer.start("CLR-D2")
-        fg_lookup = dr.texture(self.FG_LUT, fg_uv.reshape(1, pn//bn, bn, -1).contiguous(), filter_mode='linear', boundary_mode='clamp').reshape(pn, 2)
+        fg_lookup = dr.texture(
+            self.FG_LUT, fg_uv.reshape(1, pn // bn, bn, -1).contiguous(), filter_mode="linear", boundary_mode="clamp"
+        ).reshape(pn, 2)
         self.timer.stop()
         self.timer.start("CLR-D3")
 
-        specular_ref = (specular_albedo * fg_lookup[:,0:1] + fg_lookup[:,1:2])
+        specular_ref = specular_albedo * fg_lookup[:, 0:1] + fg_lookup[:, 1:2]
         specular_color = specular_ref * specular_light
         self.timer.stop()
 
@@ -856,17 +873,17 @@ class NeROField(Field):
 
         self.timer.start("CLR-F1")
         occ_info = {
-            'reflective': reflective,
-            'metallic': metallic,
-            'occ_prob': occ_prob,
-            'diffuse_color': diffuse_color,
-            'diffuse_light': diffuse_light,
-            'specular_ref': specular_ref,
-            'specular_color': specular_color,
-            'specular_light': specular_light,
-            'indirect_light': indirect_light,
-            'diffuse_albedo': diffuse_albedo,
-            'specular_albedo': specular_albedo,
+            "reflective": reflective,
+            "metallic": metallic,
+            "occ_prob": occ_prob,
+            "diffuse_color": diffuse_color,
+            "diffuse_light": diffuse_light,
+            "specular_ref": specular_ref,
+            "specular_color": specular_color,
+            "specular_light": specular_light,
+            "indirect_light": indirect_light,
+            "diffuse_albedo": diffuse_albedo,
+            "specular_albedo": specular_albedo,
         }
         self.timer.stop()
         return color, occ_info
@@ -971,7 +988,7 @@ class NeROField(Field):
         directions = ray_samples.frustums.directions
         directions_flat = directions.reshape(-1, 3)
         d = self.direction_encoding(directions_flat)
-        
+
         # appearance
         if self.training:
             embedded_appearance = self.embedding_appearance(camera_indices)
@@ -1000,8 +1017,10 @@ class NeROField(Field):
         gradients_xyz = []
         for i in range(3):
             eps_tensor = torch.zeros_like(inputs)
-            eps_tensor[...,i] = eps
-            gradients_temp = (self.mlp_base(inputs + eps_tensor)[...,:1] - self.mlp_base(inputs - eps_tensor)[...,:1]) / (2 * eps)
+            eps_tensor[..., i] = eps
+            gradients_temp = (
+                self.mlp_base(inputs + eps_tensor)[..., :1] - self.mlp_base(inputs - eps_tensor)[..., :1]
+            ) / (2 * eps)
             gradients_xyz.append(gradients_temp)
         gradients = torch.cat(gradients_xyz, dim=-1)
 
@@ -1014,7 +1033,9 @@ class NeROField(Field):
         #     dim=-1,
         # )
 
-        rgb, _ = self.get_colors(inputs, directions_flat, gradients, geo_feature.view(-1, self.geo_feat_dim))#, camera_indices)
+        rgb, _ = self.get_colors(
+            inputs, directions_flat, gradients, geo_feature.view(-1, self.geo_feat_dim)
+        )  # , camera_indices)
 
         rgb = rgb.view(*ray_samples.frustums.directions.shape[:-1], -1)
         sdf = sdf.view(*ray_samples.frustums.directions.shape[:-1], -1)
@@ -1037,10 +1058,7 @@ class NeROField(Field):
         return outputs
 
     def get_special_outputs(
-        self,
-        ray_samples: RaySamples,
-        normal_samples: Tensor,
-        return_alphas: bool = False
+        self, ray_samples: RaySamples, normal_samples: Tensor, return_alphas: bool = False
     ) -> Dict[FieldHeadNames, Tensor]:
         self.timer.lap()
         self.timer.start("NF-A1")
@@ -1090,12 +1108,14 @@ class NeROField(Field):
 
         directions = ray_samples.frustums.directions
         directions_flat = directions.reshape(-1, 3)
-        
+
         normal_samples = normal_samples.reshape(-1, 3)
         self.timer.stop()
         self.timer.start("NF-D1")
         # rgb = self.mlp_head(h).view(*outputs_shape, -1).to(directions)
-        rgb, other = self.get_colors(inputs, -directions_flat, normal_samples, density_embedding.view(-1, self.geo_feat_dim))
+        rgb, other = self.get_colors(
+            inputs, -directions_flat, normal_samples, density_embedding.view(-1, self.geo_feat_dim)
+        )
         self.timer.stop()
         self.timer.start("NF-E1")
         rgb = rgb.view(*ray_samples.frustums.directions.shape[:-1], -1)

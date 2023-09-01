@@ -301,6 +301,7 @@ class PatchPixelSampler(PixelSampler):
 
         return indices
 
+
 class FullPixelSampler(PixelSampler):
     """Samples entire image.
 
@@ -337,8 +338,8 @@ class FullPixelSampler(PixelSampler):
         sub_bs = 1
         indices = torch.zeros((sub_bs, 3), device=device, dtype=torch.int64)
         rand_camera = torch.randint(num_images, (sub_bs,))
-        indices[:,0] = rand_camera
-        
+        indices[:, 0] = rand_camera
+
         indices = indices.view(sub_bs, 1, 1, 3).broadcast_to(sub_bs, self.image_height, self.image_width, 3).clone()
 
         yys, xxs = torch.meshgrid(

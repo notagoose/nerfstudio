@@ -1,11 +1,27 @@
+# Copyright 2022 the Regents of the University of California, Nerfstudio Team and contributors. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import math
 
 import torch
 import numpy as np
 
+
 def find_nan(t):
     return
     # assert not t.isnan().any()
+
 
 def generalized_binomial_coeff(a, k):
     """Compute generalized binomial coefficients."""
@@ -15,28 +31,32 @@ def generalized_binomial_coeff(a, k):
 def assoc_legendre_coeff(l, m, k):
     """Compute associated Legendre polynomial coefficients.
 
-      Returns the coefficient of the cos^k(theta)*sin^m(theta) term in the
-      (l, m)th associated Legendre polynomial, P_l^m(cos(theta)).
+    Returns the coefficient of the cos^k(theta)*sin^m(theta) term in the
+    (l, m)th associated Legendre polynomial, P_l^m(cos(theta)).
 
-      Args:
-        l: associated Legendre polynomial degree.
-        m: associated Legendre polynomial order.
-        k: power of cos(theta).
+    Args:
+      l: associated Legendre polynomial degree.
+      m: associated Legendre polynomial order.
+      k: power of cos(theta).
 
-      Returns:
-        A float, the coefficient of the term corresponding to the inputs.
+    Returns:
+      A float, the coefficient of the term corresponding to the inputs.
     """
-    return ((-1)**m * 2**l * np.math.factorial(l) / np.math.factorial(k) /
-          np.math.factorial(l - k - m) *
-          generalized_binomial_coeff(0.5 * (l + k + m - 1.0), l))
+    return (
+        (-1) ** m
+        * 2**l
+        * np.math.factorial(l)
+        / np.math.factorial(k)
+        / np.math.factorial(l - k - m)
+        * generalized_binomial_coeff(0.5 * (l + k + m - 1.0), l)
+    )
 
 
 def sph_harm_coeff(l, m, k):
-  """Compute spherical harmonic coefficients."""
-  return (np.sqrt(
-      (2.0 * l + 1.0) * np.math.factorial(l - m) /
-      (4.0 * np.pi * np.math.factorial(l + m))) * assoc_legendre_coeff(l, m, k))
-
+    """Compute spherical harmonic coefficients."""
+    return np.sqrt(
+        (2.0 * l + 1.0) * np.math.factorial(l - m) / (4.0 * np.pi * np.math.factorial(l + m))
+    ) * assoc_legendre_coeff(l, m, k)
 
 
 def get_ml_array(deg_view):
@@ -52,26 +72,27 @@ def get_ml_array(deg_view):
     ml_array = np.array(ml_list).T
     return ml_array
 
+
 def generate_ide_fn(deg_view):
     """Generate integrated directional encoding (IDE) function.
 
-      This function returns a function that computes the integrated directional
-      encoding from Equations 6-8 of arxiv.org/abs/2112.03907.
+    This function returns a function that computes the integrated directional
+    encoding from Equations 6-8 of arxiv.org/abs/2112.03907.
 
-      Args:
-        deg_view: number of spherical harmonics degrees to use.
+    Args:
+      deg_view: number of spherical harmonics degrees to use.
 
-      Returns:
-        A function for evaluating integrated directional encoding.
+    Returns:
+      A function for evaluating integrated directional encoding.
 
-      Raises:
-        ValueError: if deg_view is larger than 5.
+    Raises:
+      ValueError: if deg_view is larger than 5.
     """
     if deg_view > 5:
-        raise ValueError('Only deg_view of at most 5 is numerically stable.')
+        raise ValueError("Only deg_view of at most 5 is numerically stable.")
 
     ml_array = get_ml_array(deg_view)
-    l_max = 2**(deg_view - 1)
+    l_max = 2 ** (deg_view - 1)
 
     # Create a matrix corresponding to ml_array holding all coefficients, which,
     # when multiplied (from the right) by the z coordinate Vandermonde matrix,
@@ -111,11 +132,18 @@ def generate_ide_fn(deg_view):
         timer.start("IDE-B2")
         find_nan(vmz)
         timer.stop()
-        
+
         timer.start("IDE-ALT-C1")
-        vmxy = torch.ones((x.shape[0], ml_array.shape[1],), device=x.device, dtype=torch.cfloat)
-        mask = ml_array[0,:] != 0
-        vmxy[:,mask] = torch.pow(x+1j*y, ml_array[:1,mask])
+        vmxy = torch.ones(
+            (
+                x.shape[0],
+                ml_array.shape[1],
+            ),
+            device=x.device,
+            dtype=torch.cfloat,
+        )
+        mask = ml_array[0, :] != 0
+        vmxy[:, mask] = torch.pow(x + 1j * y, ml_array[:1, mask])
         timer.stop()
         # Compute x+iy Vandermonde matrix.
         # vmxy_eles = []
@@ -136,9 +164,9 @@ def generate_ide_fn(deg_view):
 
         # Get spherical harmonics.
         with torch.cuda.amp.autocast(enabled=False):
-          timer.start("IDE-D1")
-          sph_harms = vmxy * torch.matmul(vmz, mat)
-          timer.stop()
+            timer.start("IDE-D1")
+            sph_harms = vmxy * torch.matmul(vmz, mat)
+            timer.stop()
 
         # Apply attenuation function using the von Mises-Fisher distribution
         # concentration parameter, kappa.
@@ -164,11 +192,14 @@ def generate_ide_fn(deg_view):
 
     return integrated_dir_enc_fn
 
+
 def get_lat_long():
-    res = (1080, 1080*3)
-    gy, gx = torch.meshgrid(torch.linspace(0.0 + 1.0 / res[0], 1.0 - 1.0 / res[0], res[0], device='cuda'),
-                            torch.linspace(-1.0 + 1.0 / res[1], 1.0 - 1.0 / res[1], res[1], device='cuda'),
-                            indexing='ij') # [h,w]
+    res = (1080, 1080 * 3)
+    gy, gx = torch.meshgrid(
+        torch.linspace(0.0 + 1.0 / res[0], 1.0 - 1.0 / res[0], res[0], device="cuda"),
+        torch.linspace(-1.0 + 1.0 / res[1], 1.0 - 1.0 / res[1], res[1], device="cuda"),
+        indexing="ij",
+    )  # [h,w]
 
     sintheta, costheta = torch.sin(gy * np.pi), torch.cos(gy * np.pi)
     sinphi, cosphi = torch.sin(gx * np.pi), torch.cos(gx * np.pi)

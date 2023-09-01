@@ -152,11 +152,11 @@ class Trainer:
             local_rank=self.local_rank,
             grad_scaler=self.grad_scaler,
         )
-        
+
         if self.pipeline.model.moo():
             print("MOO", self.base_dir)
             self.pipeline.model.config.save_dir = self.base_dir
-        
+
         self.optimizers = self.setup_optimizers()
 
         # set up viewer if enabled
