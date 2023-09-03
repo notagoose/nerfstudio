@@ -59,6 +59,8 @@
 
 # About
 
+This is a fork of nerfstudio. Features unique to this repository are described in [Mesh Exporting](#mesh-exporting) and [Mesh Optimization](#mesh-optimization).
+
 _It’s as simple as plug and play with nerfstudio!_
 
 Nerfstudio provides a simple API that allows for a simplified end-to-end process of creating, training, and testing NeRFs.
@@ -236,6 +238,20 @@ Alternatively you can use the CLI without the viewer. Learn about the export opt
 ns-export pointcloud --help
 ```
 
+### Mesh Exporting
+
+There are multiple options for exporting meshes from a trained model. [Poisson Surface Reconstruction](https://github.com/mkazhdan/PoissonRecon) with envelope constraints can be used with the following command. Note that you must have the executables compiled and pass in the location with the `--poisson_executable` flag, e.g. `--poisson_executable ~/PoissonRecon/Bin/Linux/PoissonRecon`.
+
+```bash
+ns-export envelope --load-config {outputs/.../config.yml} --output-dir {exports/.../} --poisson_executable {exe location}
+```
+
+An experimental isosurface extraction with dual contouring is also provided. It is recommended to use on models with consistent normals such as SDF models.
+```bash
+ns-export dual-contouring --load-config {outputs/.../config.yml} --output-dir {exports/.../} --num-points 20000 --use-bounding-box True --bounding-box-min -1 -1 -1 --bounding-box-max 1 1 1 --max-depth 6
+```
+
+
 ## 4. Using Custom Data
 
 Using an existing dataset is great, but likely you want to use your own data! We support various methods for using your own data. Before it can be used in nerfstudio, the camera location and orientations must be determined and then converted into our format using `ns-process-data`. We rely on external tools for this, instructions and information can be found in the documentation.
@@ -263,6 +279,10 @@ ns-train vanilla-nerf --data DATA_PATH
 ```
 
 For a full list of included models run `ns-train --help`.
+
+### Mesh Optimization
+
+Post-exported meshes can be further optimized using the `ns-train mesh ...` option.
 
 ### Modify Configuration
 

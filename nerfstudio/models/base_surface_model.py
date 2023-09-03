@@ -218,6 +218,7 @@ class SurfaceModel(Model):
 
         rgb = self.renderer_rgb(rgb=field_outputs[FieldHeadNames.RGB], weights=weights)
         depth = self.renderer_depth(weights=weights, ray_samples=ray_samples)
+        normalized_depth = depth.clone()
         # the rendered depth is point-to-point distance and we should convert to depth
         depth = depth / ray_bundle.metadata["directions_norm"]
 
@@ -259,6 +260,7 @@ class SurfaceModel(Model):
             "rgb": rgb,
             "accumulation": accumulation,
             "depth": depth,
+            "normalized_depth": normalized_depth,
             "normal": normal,
             "weights": weights,
             # used to scale z_vals for free space and sdf loss
