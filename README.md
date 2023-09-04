@@ -59,7 +59,7 @@
 
 # About
 
-This is a fork of nerfstudio. Features unique to this repository are described in [Mesh Exporting](#mesh-exporting) and [Mesh Optimization](#mesh-optimization).
+This is a fork of nerfstudio. Features unique to this repository are described in [Mesh Exporting](#mesh-exporting).
 
 _It’s as simple as plug and play with nerfstudio!_
 
@@ -279,10 +279,6 @@ ns-train vanilla-nerf --data DATA_PATH
 ```
 
 For a full list of included models run `ns-train --help`.
-
-### Mesh Optimization
-
-Post-exported meshes can be further optimized using the `ns-train mesh ...` option.
 
 ### Modify Configuration
 
